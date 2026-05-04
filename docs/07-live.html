@@ -47,48 +47,43 @@
         </ol>
 
         <div class="diagram">
-┌──────────────────────────────────────────────┐
-│     LIVE MONITORING PIPELINE                 │
-└──────────────────────────────────────────────┘
-
-Incoming Log Stream
-        │
-        ▼
-┌──────────────────┐
-│  Read Log Entry  │
-│ "Got block..."   │
-└──────────────────┘
-        │
-        ▼
-┌──────────────────────────┐
-│ Encode with Text Model   │
-│ → [0.12, -0.45, ...]    │
-└──────────────────────────┘
-        │
-        ▼
-┌──────────────────────────┐
-│ Add to Sequence Window   │
-│ [v1, v2, ..., v10]      │
-└──────────────────────────┘
-        │
-        ▼
-┌──────────────────────────┐
-│ Score with Anomaly Model │
-│ Error = 0.23             │
-└──────────────────────────┘
-        │
-        ▼
-┌──────────────────────────┐
-│ Compare to Threshold     │
-│ 0.23 < 2.5? NORMAL      │
-│ 0.23 > 2.5? ANOMALY! ⚠   │
-└──────────────────────────┘
-        │
-        ▼
-┌──────────────────────────┐
-│ Output Alert (if anomaly)│
-│ Log + Score + Context    │
-└──────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│              LIVE MONITORING PIPELINE                    │
+├──────────────────────────────────────────────────────────┤
+│                                                           │
+│  Incoming Logs              Processing                   │
+│  ──────────────              ──────────                   │
+│                                                           │
+│  "14:23:45 Got block"                                    │
+│  "14:23:46 BlockReport"          [READ LOG]              │
+│  "14:23:47 Verification"              │                  │
+│                                        ▼                  │
+│  (rotating through logs)      [ENCODE TEXT]              │
+│                               Compress to 128-D          │
+│                                        │                  │
+│                                        ▼                  │
+│                          [MANAGE SEQUENCE WINDOW]        │
+│                          Sliding window of 10 vectors    │
+│                                        │                  │
+│                                        ▼                  │
+│                           [ANOMALY SCORING]              │
+│                          Reconstruction Error            │
+│                                        │                  │
+│  Threshold = mean + 2.5 × std         ▼                  │
+│                            [COMPARE TO THRESHOLD]        │
+│                          Score < Threshold? ✓ NORMAL     │
+│                          Score > Threshold? ⚠ ANOMALY    │
+│                                        │                  │
+│  Alert Destinations ◄────────         ▼                  │
+│  ├─ Slack webhook            [ALERT ON ANOMALY]         │
+│  ├─ PagerDuty                Msg + Score + Time          │
+│  ├─ Email                                                │
+│  └─ Syslog                                               │
+│                                                           │
+├──────────────────────────────────────────────────────────┤
+│  Status: Running, 10K msgs/sec, 120s latency             │
+│  Last anomaly: 5 mins ago (score: 4.8)                   │
+└──────────────────────────────────────────────────────────┘
         </div>
 
         <h3>Running Live Monitoring</h3>

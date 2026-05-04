@@ -39,30 +39,60 @@
         </p>
 
         <div class="diagram">
-STAGE 1: TEXT AUTOENCODER
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Input:   "BlockReport processing took 120ms"
-           ↓
-      [Word Embedding]
-           ↓
-      [LSTM Encoder]  ← Compresses to 128-dim vector
-           ↓
-      [Dense Bottleneck]
-           ↓
-      [LSTM Decoder]  ← Reconstructs original message
-           ↓
-Output:  "BlockReport processing took 120ms"
-Latent:  [0.12, -0.45, 0.89, ..., 0.23]  (128 floats)
+┌──────────────────────────────────────────────────────────────┐
+│                  STAGE 1: TEXT AUTOENCODER                   │
+├──────────────────────────────────────────────────────────────┤
+│                                                               │
+│   Input Message                                              │
+│   "BlockReport processing took 120ms"                        │
+│                      │                                        │
+│                      ▼                                        │
+│             [Embedding Layer]                                │
+│                      │                                        │
+│                      ▼                                        │
+│          [LSTM Encoder (bidirectional)]                      │
+│                      │                                        │
+│                      ▼                                        │
+│      [Bottleneck: 128-D Vector]                             │
+│       v = [0.12, -0.45, 0.89, ...]                          │
+│                      │                                        │
+│                      ▼                                        │
+│          [LSTM Decoder (reverses encoding)]                  │
+│                      │                                        │
+│                      ▼                                        │
+│             [Output Layer]                                   │
+│                      │                                        │
+│                      ▼                                        │
+│   Reconstructed Message                                      │
+│   "BlockReport processing took 120ms"                        │
+│                                                               │
+└──────────────────────────────────────────────────────────────┘
 
-
-STAGE 2: ANOMALY DETECTOR
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Input Sequence (10 vectors):
-[v1, v2, v3, v4, v5, v6, v7, v8, v9, v10]
-           ↓
-[Bidirectional LSTM]  ← Learns forward AND backward context
-           ↓
-[Dense Output Layer]  ← Predicts next vector
+┌──────────────────────────────────────────────────────────────┐
+│                 STAGE 2: ANOMALY DETECTOR                    │
+├──────────────────────────────────────────────────────────────┤
+│                                                               │
+│   Input Sequence (10 encoded vectors)                        │
+│   [v1, v2, v3, v4, v5, v6, v7, v8, v9, v10]                │
+│                      │                                        │
+│                      ▼                                        │
+│      [Bidirectional LSTM]                                    │
+│      ├─ Forward pass  ──→                                    │
+│      └─ Backward pass ←──                                    │
+│                      │                                        │
+│                      ▼                                        │
+│   [Dense Prediction Layer]                                   │
+│                      │                                        │
+│                      ▼                                        │
+│   Predicted next vector: v11_hat                             │
+│                      │                                        │
+│                      ▼                                        │
+│   Calculate Error: |v11 - v11_hat|                           │
+│   • Error < 0.1  = Normal ✓                                  │
+│   • Error > 0.5  = Anomaly ⚠                                 │
+│                                                               │
+└──────────────────────────────────────────────────────────────┘
+        </div>
            ↓
 Predicted: v10'
 Actual:    v10

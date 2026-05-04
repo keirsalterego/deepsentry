@@ -39,45 +39,92 @@
         </p>
 
         <div class="diagram">
-┌────────────────┐
-│  Raw Logs      │
-│ HDFS_1.log     │
-└────────┬────────┘
-         │
-    [Stage 1: PREPARE]
-    Extract messages, split train/val
-         │
-         ▼
-┌────────────────────────┐
-│ Prepared Text Data     │
-│ • train.txt            │
-│ • val.txt              │
-│ • vocab.pkl            │
-└────────┬───────────────┘
-         │
-    [Stage 2: TEXT ENCODING TRAINING]
-    Learn message patterns with LSTM autoencoder
-         │
-         ▼
-┌────────────────────────┐
-│ Text Autoencoder       │
-│ encoder.h5             │
-│ decoder.h5             │
-└────────┬───────────────┘
-         │
-    [Stage 3: DATASET ENCODING]
-    Compress all logs to vectors
-         │
-         ▼
-┌────────────────────────┐
-│ Encoded Vectors        │
-│ • train_encoded.pkl    │
-│ • val_encoded.pkl      │
-│ • test_encoded.pkl     │
-└────────┬───────────────┘
-         │
-    [Stage 4: ANOMALY TRAINING]
-    Learn normal temporal patterns
+┌──────────────┐
+│   RAW LOGS   │
+│  HDFS_1.log  │
+└──────┬───────┘
+       │
+  [STAGE 1: PREPARE]
+       │
+       ├─→ Split into train/val
+       ├─→ Extract messages
+       └─→ Build vocabulary
+       │
+       ▼
+┌──────────────────────┐
+│ PREPARED TEXT DATA   │
+│ • train.txt          │
+│ • val.txt            │
+│ • vocab.pkl          │
+└──────┬───────────────┘
+       │
+  [STAGE 2: TEXT TRAINING]
+  LSTM Autoencoder
+       │
+       ├─→ Learn text patterns
+       ├─→ Compression to 128 dims
+       └─→ Reconstruction quality
+       │
+       ▼
+┌──────────────────────┐
+│  TEXT AUTOENCODER    │
+│ • encoder.h5         │
+│ • decoder.h5         │
+│ • metadata.json      │
+└──────┬───────────────┘
+       │
+  [STAGE 3: DATASET ENCODE]
+       │
+       ├─→ Compress all logs
+       ├─→ Create sequences
+       └─→ Save vectors
+       │
+       ▼
+┌──────────────────────┐
+│ ENCODED SEQUENCES    │
+│ • train_encoded.pkl  │
+│ • val_encoded.pkl    │
+│ • test_encoded.pkl   │
+└──────┬───────────────┘
+       │
+  [STAGE 4: ANOMALY TRAINING]
+  Bidirectional LSTM
+       │
+       ├─→ Learn temporal patterns
+       ├─→ Predict next sequence
+       └─→ Calculate errors
+       │
+       ▼
+┌──────────────────────┐
+│ ANOMALY DETECTOR     │
+│ • detector.h5        │
+│ • threshold.json     │
+│ • metadata.json      │
+└──────┬───────────────┘
+       │
+  [STAGE 5: EVALUATION]
+       │
+       ├─→ Calculate AUC/metrics
+       ├─→ Generate ROC curve
+       └─→ Create report
+       │
+       ▼
+┌──────────────────────┐
+│  EVAL RESULTS        │
+│ • metrics.json       │
+│ • roc_curve.png      │
+│ • precision_recall.* │
+└──────┬───────────────┘
+       │
+  [STAGE 6: LIVE MONITORING]
+       │
+       ├─→ Load models
+       ├─→ Score incoming logs
+       └─→ Alert on anomalies
+       │
+       ▼
+    [ALERTS & MONITORING]
+        </div>
          │
          ▼
 ┌────────────────────────┐

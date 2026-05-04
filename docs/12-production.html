@@ -40,32 +40,57 @@
         <h4>Recommended Architecture</h4>
 
         <div class="diagram">
-┌─────────────────────────────────────────────────┐
-│          LOG SOURCES                            │
-│  Servers, Applications, Devices                 │
-└────────────────┬────────────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────────────────┐
-│       LOG AGGREGATION LAYER                     │
-│  Fluentd, Logstash, Filebeat                    │
-│  (Collect, parse, route)                        │
-└────────────────┬────────────────────────────────┘
-                 │
-        ┌────────┴────────┐
-        ▼                 ▼
-   ┌─────────┐      ┌──────────────┐
-   │ Storage │      │ DEEPSENTRY   │
-   │ HDFS/S3 │      │ Live Monitor │
-   │ Long    │      │ (Real-time)  │
-   │ term    │      └──────┬───────┘
-   └─────────┘             │
-                           ▼
-                    ┌─────────────────┐
-                    │  Alerting       │
-                    │  Slack, PagerD, │
-                    │  Email, etc     │
-                    └─────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│               PRODUCTION DEPLOYMENT ARCHITECTURE            │
+├────────────────────────────────────────────────────────────┤
+│                                                             │
+│  LOG SOURCES (Various)                                      │
+│  ├─ Servers                                                │
+│  ├─ Applications                                           │
+│  └─ Devices                                                │
+│          │                                                  │
+│          ▼                                                  │
+│  ┌──────────────────────────────────────┐                  │
+│  │   LOG AGGREGATION LAYER              │                  │
+│  │   (Fluentd, Logstash, Filebeat)      │                  │
+│  │   • Collection from all sources       │                  │
+│  │   • Parsing and enrichment            │                  │
+│  │   • Routing and filtering             │                  │
+│  └──────────────────────────────────────┘                  │
+│          │                                                  │
+│    ┌─────┴──────────────┬──────────────┐                   │
+│    │                    │              │                   │
+│    ▼                    ▼              ▼                   │
+│ ┌────────────┐  ┌──────────────────┐  ┌──────────────┐   │
+│ │  STORAGE   │  │  DEEPSENTRY      │  │  STREAMING   │   │
+│ │  LAYER     │  │  (Live Monitor)  │  │  PROCESSOR   │   │
+│ │            │  │                  │  │              │   │
+│ │ HDFS/S3    │  │ • Load models    │  │ Real-time    │   │
+│ │ Long-term  │  │ • Score logs     │  │ processing   │   │
+│ │ storage    │  │ • Manage state   │  │              │   │
+│ └────────────┘  │ • Threshold mgmt │  └──────────────┘   │
+│                 │ • Alert          │                      │
+│                 │   generation     │                      │
+│                 └────────┬─────────┘                       │
+│                          │                                  │
+│                          ▼                                  │
+│                 ┌──────────────────────┐                   │
+│                 │   ALERTING SYSTEMS   │                   │
+│                 ├──────────────────────┤                   │
+│                 │ • Slack webhooks     │                   │
+│                 │ • PagerDuty          │                   │
+│                 │ • Email notifications│                   │
+│                 │ • Syslog             │                   │
+│                 │ • Custom integrations│                   │
+│                 └──────────────────────┘                   │
+│                                                             │
+│  MONITORING & OBSERVABILITY                                │
+│  ├─ Prometheus metrics (throughput, latency, errors)       │
+│  ├─ Dashboards (Grafana, CloudWatch)                      │
+│  ├─ Log aggregation (ELK, Splunk)                         │
+│  └─ Incident management (on-call rotations)               │
+│                                                             │
+└────────────────────────────────────────────────────────────┘
         </div>
 
         <h3>Security Considerations</h3>

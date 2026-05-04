@@ -155,21 +155,39 @@ blk_111111111: 1  # Block 111111111 contains an anomaly</code></pre>
         <h3>Data Flow Through the Pipeline</h3>
 
         <div class="diagram">
-RAW LOGS                      PREPARED DATA              ENCODED VECTORS
-HDFS_1.log                     prepared_data/
-"14:23:45 BlockReport..."  →   ├── train.txt       →    ├── train_encoded.pkl
-"14:23:46 Got block..."        ├── val.txt         →    ├── val_encoded.pkl
-"14:23:47 Verification..."     └── vocab.pkl       →    └── test_encoded.pkl
-
-
-                          TEXT AUTOENCODER
-                          "BlockReport... took 120ms"
-                          → [0.12, -0.45, 0.89, ...]
-
-ANOMALY TRAINING                LIVE SCORING
-Train vectors              →     Stream incoming vectors
-anomaly_model.h5           →     Score each vector
-                                 Flag high-scoring sequences
+┌──────────────────────────────────────────────────────────────┐
+│                    DATA FLOW THROUGH PIPELINE                │
+├──────────────────────────────────────────────────────────────┤
+│                                                               │
+│  Raw Logs              Text Processing           Encoding    │
+│  ──────────            ────────────────           ────────    │
+│                                                               │
+│  HDFS_1.log                                                  │
+│  "14:23:45 BlockReport    [PREPARE]     train.txt            │
+│   processing took 120ms"     │            val.txt            │
+│  "14:23:46 Got block..."     │            vocab.pkl          │
+│  "14:23:47 Verification"     │                │              │
+│  "14:23:48 BlockReport"      ▼             [TEXT ENCODER]    │
+│                                                │              │
+│  labels.txt          Ground Truth             │              │
+│  blk_123:1                                    ▼              │
+│  blk_456:0                                                   │
+│  blk_789:1            train_encoded.pkl       Output Shape   │
+│                       val_encoded.pkl    (N, 128)            │
+│                       test_encoded.pkl   vectors             │
+│                                                               │
+├──────────────────────────────────────────────────────────────┤
+│                                                               │
+│         Anomaly Training              Evaluation              │
+│         ────────────────              ──────────              │
+│                                                               │
+│   Encoded Sequences    [ANOMALY]      metrics.json            │
+│   [v1,v2,...,v10]   ──→  TRAINING  ──→ AUC: 0.92            │
+│   [v2,v3,...,v11]       [LSTM]        ROC curve              │
+│   ...                                  Performance           │
+│                                        Analysis              │
+│                                                               │
+└──────────────────────────────────────────────────────────────┘
         </div>
 
         <h3>Preparing Your Own Logs</h3>

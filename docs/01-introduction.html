@@ -101,21 +101,26 @@
         </p>
 
         <div class="diagram">
-┌─────────────────────────────────────────────────────────────┐
-│                      DEEPSENTRY PIPELINE                     │
-└─────────────────────────────────────────────────────────────┘
-
-STAGE 1: TEXT ENCODING
-  Raw Logs → [LSTM Autoencoder] → Compressed Vectors
-  "kernel panic detected"       → [0.12, -0.45, 0.89, ...]
-  "disk space low"               → [0.34, 0.11, -0.23, ...]
-  
-STAGE 2: ANOMALY DETECTION
-  Time-Series Vectors → [Bidirectional LSTM] → Reconstruction Error
-  [0.12, 0.34, ...] → 0.02 (normal)
-  [0.15, 0.89, ...] → 0.78 (anomaly!)
-
-OUTPUT: Anomaly Scores & Live Alerts
+┌────────────────────────────────────────────────────────────┐
+│                    DEEPSENTRY APPROACH                      │
+├────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Step 1: TEXT ENCODING (LSTM Autoencoder)                 │
+│  ─────────────────────────────────────────                │
+│                                                             │
+│  "kernel panic detected"     ──→  [0.12, -0.45, 0.89, ...] │
+│  "disk space low"            ──→  [0.34, 0.11, -0.23, ...] │
+│  "connection timeout"        ──→  [-0.15, 0.78, 0.02, ...] │
+│                                                             │
+│                                                             │
+│  Step 2: ANOMALY DETECTION (Bidirectional LSTM)           │
+│  ─────────────────────────────────────────────            │
+│                                                             │
+│  Sequence [v1, v2, v3, ...]  ──→  Reconstruction Error    │
+│                                    • 0.02 = normal        │
+│                                    • 0.78 = anomaly!      │
+│                                                             │
+└────────────────────────────────────────────────────────────┘
         </div>
 
         <p>
