@@ -197,14 +197,19 @@ ul.tight li {
 /* Diagram styling */
 .diagram {
   background: #f9f9f9;
-  border: 1px solid #c8c8c8;
-  padding: 20px;
-  margin: 20px 0;
+  border: 2px solid #666;
+  border-radius: 4px;
+  padding: 24px;
+  margin: 24px auto;
   font-family: Consolas, "Courier New", monospace;
   font-size: 13px;
-  overflow: auto;
-  line-height: 1.4;
-  color: #444;
+  overflow-x: auto;
+  line-height: 1.5;
+  color: #333;
+  text-align: center;
+  max-width: 800px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  white-space: pre;
 }
 
 /* Section headers with anchors */
@@ -298,7 +303,7 @@ blockquote {
 
 .learning-outcomes h4 {
   margin: 0 0 10px;
-  color: #e65100;
+  color: #1a1a1a;
 }
 
 .learning-outcomes ul {
