@@ -29,25 +29,329 @@
         </ul>
       </aside>
       <main class="content">
-        <h2 class="chapter-title">Model architecture</h2>
-        <p class="chapter-meta">The project combines a text autoencoder with a recurrent anomaly detector.</p>
+        <h2>Model Architecture: Deep Dive</h2>
+        <p class="chapter-meta">Understanding the neural networks that power DeepSentry: autoencoders, LSTMs, and how they work together.</p>
+
+        <h3>Overall Architecture</h3>
+
+        <p>
+          DeepSentry uses a two-stage approach:
+        </p>
+
+        <div class="diagram">
+STAGE 1: TEXT AUTOENCODER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Input:   "BlockReport processing took 120ms"
+           ↓
+      [Word Embedding]
+           ↓
+      [LSTM Encoder]  ← Compresses to 128-dim vector
+           ↓
+      [Dense Bottleneck]
+           ↓
+      [LSTM Decoder]  ← Reconstructs original message
+           ↓
+Output:  "BlockReport processing took 120ms"
+Latent:  [0.12, -0.45, 0.89, ..., 0.23]  (128 floats)
+
+
+STAGE 2: ANOMALY DETECTOR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Input Sequence (10 vectors):
+[v1, v2, v3, v4, v5, v6, v7, v8, v9, v10]
+           ↓
+[Bidirectional LSTM]  ← Learns forward AND backward context
+           ↓
+[Dense Output Layer]  ← Predicts next vector
+           ↓
+Predicted: v10'
+Actual:    v10
+Error:     distance(v10', v10)
+
+If error is HIGH → anomalous
+If error is LOW  → normal
+        </div>
+
+        <h3>Part 1: The Text Autoencoder</h3>
+
+        <h4>What is an Autoencoder?</h4>
+
+        <p>
+          An autoencoder is a neural network that learns to compress and decompress data. It has two parts:
+        </p>
+
+        <ul>
+          <li><strong>Encoder:</strong> Takes input (a log message) and compresses it to a small vector</li>
+          <li><strong>Decoder:</strong> Takes the compressed vector and reconstructs the original message</li>
+        </ul>
+
+        <p>
+          During training, we feed the model text and ask it to reproduce the exact same text. By forcing the model through a narrow "bottleneck" (the compressed vector), it learns what features are important to represent the message.
+        </p>
+
+        <h4>Why Use an Autoencoder for Logs?</h4>
+
+        <p>
+          Log messages are high-dimensional (thousands of possible words) but low-rank (repetitive patterns). An autoencoder:
+        </p>
+
+        <ul>
+          <li><strong>Compresses:</strong> From ~5000-word vocabulary to 128-dim vector (40x compression)</li>
+          <li><strong>Learns semantics:</strong> Messages with similar meaning get similar vectors</li>
+          <li><strong>Unsupervised:</strong> Needs no labels, just learns from data</li>
+          <li><strong>Lossy:</strong> Intentionally loses unimportant details</li>
+        </ul>
+
+        <h4>Architecture Details</h4>
+
+        <pre><code>TEXT AUTOENCODER LAYERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ENCODER HALF:
+Input: [Word IDs]  e.g., [1234, 5678, 9012]
+    ↓
+Embedding: [Word Vectors]  e.g., [[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]]
+    ↓
+LSTM (forward): Processes left-to-right
+    ↓
+LSTM (backward): Processes right-to-left
+    ↓
+Bottleneck Dense Layer: Reduces to 128 dimensions
+    ↓
+Latent Vector: [0.12, -0.45, 0.89, ..., 0.23]  (128 floats)
+
+DECODER HALF:
+Latent Vector: [0.12, -0.45, 0.89, ..., 0.23]
+    ↓
+Dense Layer: Expands back up
+    ↓
+LSTM: Generates output word-by-word
+    ↓
+Softmax: Probability over vocabulary for each position
+    ↓
+Output: [1234, 5678, 9012]  (Word IDs, should match input)
+        </code></pre>
+
+        <h4>Training the Text Autoencoder</h4>
+
+        <p>
+          During training:
+        </p>
+
+        <ol>
+          <li>Take a log message, e.g., "BlockReport processing took 120ms"</li>
+          <li>Convert words to IDs: [1, 234, 567, 89, 101]</li>
+          <li>Feed through encoder to get latent vector</li>
+          <li>Feed latent vector through decoder to reconstruct message</li>
+          <li>Compare reconstructed output to original input</li>
+          <li>Calculate reconstruction loss (how wrong the reconstruction is)</li>
+          <li>Update weights to reduce loss</li>
+          <li>Repeat for thousands of messages</li>
+        </ol>
+
+        <p>
+          After training, we throw away the decoder and keep just the encoder. We use it to compress every log message in the dataset into vectors.
+        </p>
+
+        <h3>Part 2: The Anomaly Detector (Bidirectional LSTM)</h3>
+
+        <h4>Why LSTM for Sequences?</h4>
+
+        <p>
+          LSTMs (Long Short-Term Memory networks) are specially designed for sequence data. Regular neural networks forget information quickly, but LSTMs can maintain context across many steps.
+        </p>
+
+        <p>
+          Why this matters for logs:
+        </p>
+
+        <ul>
+          <li><strong>Memory:</strong> An LSTM can remember events from 100 steps ago</li>
+          <li><strong>Context:</strong> "authentication failed" means different things in different contexts</li>
+          <li><strong>Patterns:</strong> LSTMs learn sequences like: failure → retry → timeout → error message</li>
+        </ul>
+
+        <h4>Bidirectional Processing</h4>
+
+        <p>
+          The anomaly detector uses a <strong>bidirectional</strong> LSTM:
+        </p>
+
+        <ul>
+          <li><strong>Forward:</strong> Reads sequence left-to-right (past to present)</li>
+          <li><strong>Backward:</strong> Reads sequence right-to-left (present to past)</li>
+          <li><strong>Combined:</strong> Uses context from both directions</li>
+        </ul>
+
+        <p>
+          Why? Consider this sequence:
+        </p>
+
+        <pre><code>Log 1: "app started"
+Log 2: "listening on port 8080"
+Log 3: "memory usage: 45%"
+Log 4: [ANOMALY] "unexpected error"
+Log 5: "memory usage: 92%"
+        </code></pre>
+
+        <p>
+          A forward-only LSTM might miss the anomaly at log 4 because it hasn't seen logs 5 yet. A bidirectional LSTM sees that log 4 breaks the pattern established by the surrounding context.
+        </p>
+
+        <h4>Reconstruction Error as Anomaly Score</h4>
+
+        <p>
+          The detector works by making predictions:
+        </p>
+
+        <ol>
+          <li>Given vectors [v1, v2, ..., v9], predict what v10 should be</li>
+          <li>Compare prediction to actual v10</li>
+          <li>Large error = anomaly, small error = normal</li>
+        </ol>
+
+        <p>
+          Mathematically:
+        </p>
+
+        <pre><code>anomaly_score = distance(predicted_v10, actual_v10)
+
+distance can be:
+  • Euclidean: sqrt((p1-a1)² + (p2-a2)² + ... + (p128-a128)²)
+  • Manhattan: |p1-a1| + |p2-a2| + ... + |p128-a128|
+  • Cosine: 1 - (p·a) / (||p|| ||a||)
+        </code></pre>
+
+        <h4>Training the Anomaly Detector</h4>
+
+        <p>
+          Training data is normal sequences (from training logs). The goal: minimize reconstruction error on normal data, so any deviation signals an anomaly.
+        </p>
+
+        <ol>
+          <li>Create 10-step sliding windows from training vectors</li>
+          <li>For each window [v1...v9], predict v10</li>
+          <li>Calculate loss: reconstruction error on v10</li>
+          <li>Update LSTM weights to improve predictions</li>
+          <li>Validate on separate validation data to prevent overfitting</li>
+          <li>Save best model (lowest validation error)</li>
+        </ol>
+
+        <h3>Why This Architecture?</h3>
+
+        <p>
+          DeepSentry combines autoencoders + LSTMs because:
+        </p>
 
         <table>
-          <tr><th>Stage</th><th>Purpose</th></tr>
-          <tr><td>Text autoencoder</td><td>Compresses log messages into a learned latent representation</td></tr>
-          <tr><td>Sequence model</td><td>Scores encoded sequences for unusual reconstruction behavior</td></tr>
-          <tr><td>Live detector</td><td>Applies rolling anomaly checks to incoming log lines</td></tr>
+          <tr>
+            <th>Component</th>
+            <th>Problem It Solves</th>
+          </tr>
+          <tr>
+            <td>Text Autoencoder</td>
+            <td>Log messages are variable-length text. Autoencoder converts to fixed-size vectors, removing noise.</td>
+          </tr>
+          <tr>
+            <td>LSTM Detector</td>
+            <td>Sequences of vectors show temporal patterns. LSTM detects deviations from normal patterns.</td>
+          </tr>
+          <tr>
+            <td>Bidirectional</td>
+            <td>Context before and after an event matters. Bidirectional processing captures full context.</td>
+          </tr>
         </table>
 
-        <div class="box">
-          <h3>Code areas</h3>
-          <ul class="tight">
-            <li><code>ta/</code> contains the text autoencoder package</li>
-            <li><code>kad/</code> contains the recurrent anomaly model package</li>
-            <li><code>src/tx</code> combines encoding and dataset preparation</li>
-            <li><code>src/an</code> handles scoring and analysis</li>
-          </ul>
+        <h3>Key Hyperparameters</h3>
+
+        <p>
+          These control model behavior and are configurable in <code>dockerconfig/</code>:
+        </p>
+
+        <table>
+          <tr>
+            <th>Parameter</th>
+            <th>Default</th>
+            <th>Impact</th>
+          </tr>
+          <tr>
+            <td>embedding_size</td>
+            <td>64</td>
+            <td>Size of word vectors. Larger = more expressive, slower training</td>
+          </tr>
+          <tr>
+            <td>encoder_dim</td>
+            <td>128</td>
+            <td>Size of latent vectors. Larger = more information preserved</td>
+          </tr>
+          <tr>
+            <td>lstm_hidden_dim</td>
+            <td>64</td>
+            <td>LSTM internal size. Larger = more capacity to learn patterns</td>
+          </tr>
+          <tr>
+            <td>sequence_length</td>
+            <td>10</td>
+            <td>Length of sequences for anomaly training. Longer = captures longer patterns</td>
+          </tr>
+          <tr>
+            <td>epochs</td>
+            <td>10</td>
+            <td>Training iterations. More = better learning, but risk of overfitting</td>
+          </tr>
+          <tr>
+            <td>batch_size</td>
+            <td>32</td>
+            <td>Samples per gradient update. Larger = faster but less stable training</td>
+          </tr>
+        </table>
+
+        <h3>Intuition: Why Reconstruction Error Works</h3>
+
+        <p>
+          The core assumption: <strong>Normal sequences follow predictable patterns</strong>.
+        </p>
+
+        <p>
+          Example normal patterns in HDFS logs:
+        </p>
+
+        <ul>
+          <li>BlockReport usually followed by Got block report</li>
+          <li>Got block report usually followed by Verification complete</li>
+          <li>File deleted usually followed by Block report</li>
+        </ul>
+
+        <p>
+          When something anomalous happens:
+        </p>
+
+        <ul>
+          <li>A sequence breaks learned patterns</li>
+          <li>The LSTM can't predict well</li>
+          <li>Reconstruction error spikes</li>
+        </ul>
+
+        <p>
+          Example anomaly: normally messages about file deletion don't appear in rapid succession. If they do, that's unusual, and the model can't predict it well.
+        </p>
+
+        <div class="note">
+          <strong>Key Insight:</strong> We're not looking for specific attack signatures. We're looking for deviations from normal system behavior. The model learns "what normal looks like" and flags everything else as suspicious.
         </div>
+
+        <h3>Limitations and When to Consider Alternatives</h3>
+
+        <ul>
+          <li><strong>Seasonal patterns:</strong> If your system has patterns that repeat on hourly/daily/weekly cycles, consider including time features</li>
+          <li><strong>Concept drift:</strong> If your system fundamentally changes (new features, architecture), models trained on old data may not work well</li>
+          <li><strong>Very large logs:</strong> For billions of messages, consider sampling or hierarchical approaches</li>
+          <li><strong>Domain expertise:</strong> If you know specific attacks to detect, hybrid approaches combining rule-based + learned methods can be better</li>
+        </ul>
+
+        <div class="footer-nav">
+          <a href="04-pipeline.html">Previous: Pipeline</a>
+          <a href="06-config.html">Next: Configuration</a>
 
         <div class="footer-nav">
           <a href="04-pipeline.html">Previous: Pipeline</a>

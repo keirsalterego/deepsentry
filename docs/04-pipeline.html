@@ -29,25 +29,379 @@
         </ul>
       </aside>
       <main class="content">
-        <h2 class="chapter-title">Pipeline</h2>
-        <p class="chapter-meta">The pipeline is staged, with each step writing output that feeds the next step.</p>
+        <h2>The Pipeline: End-to-End Walkthrough</h2>
+        <p class="chapter-meta">Understanding each stage of the anomaly detection pipeline: from raw logs to anomaly scores.</p>
+
+        <h3>Pipeline Overview</h3>
+
+        <p>
+          The DeepSentry pipeline consists of 6 sequential stages. Each stage takes input from the previous stage and produces output for the next:
+        </p>
+
+        <div class="diagram">
+┌────────────────┐
+│  Raw Logs      │
+│ HDFS_1.log     │
+└────────┬────────┘
+         │
+    [Stage 1: PREPARE]
+    Extract messages, split train/val
+         │
+         ▼
+┌────────────────────────┐
+│ Prepared Text Data     │
+│ • train.txt            │
+│ • val.txt              │
+│ • vocab.pkl            │
+└────────┬───────────────┘
+         │
+    [Stage 2: TEXT ENCODING TRAINING]
+    Learn message patterns with LSTM autoencoder
+         │
+         ▼
+┌────────────────────────┐
+│ Text Autoencoder       │
+│ encoder.h5             │
+│ decoder.h5             │
+└────────┬───────────────┘
+         │
+    [Stage 3: DATASET ENCODING]
+    Compress all logs to vectors
+         │
+         ▼
+┌────────────────────────┐
+│ Encoded Vectors        │
+│ • train_encoded.pkl    │
+│ • val_encoded.pkl      │
+│ • test_encoded.pkl     │
+└────────┬───────────────┘
+         │
+    [Stage 4: ANOMALY TRAINING]
+    Learn normal temporal patterns
+         │
+         ▼
+┌────────────────────────┐
+│ Anomaly Detector       │
+│ detector.h5            │
+│ bidirectional LSTM     │
+└────────┬───────────────┘
+         │
+    [Stage 5: EVALUATION]
+    Score test set, compute metrics
+         │
+         ▼
+┌────────────────────────┐
+│ Anomaly Scores         │
+│ • scores.pkl           │
+│ • roc_curve.png        │
+│ • metrics.json         │
+└────────┬───────────────┘
+         │
+    [Stage 6: LIVE MONITORING]
+    Stream incoming logs and score
+         │
+         ▼
+┌────────────────────────┐
+│ Real-time Alerts       │
+│ Anomalies detected     │
+│ & flagged online       │
+└────────────────────────┘
+        </div>
+
+        <h3>Stage 1: Data Preparation</h3>
+
+        <p>
+          <strong>Input:</strong> Raw log file in Utah format (YYMMDD HHMMSS MESSAGE)<br>
+          <strong>Output:</strong> Prepared text files and vocabulary<br>
+          <strong>Module:</strong> <code>src/tx/prepare.py</code>
+        </p>
+
+        <h4>What Happens</h4>
 
         <ol>
-          <li>Prepare raw logs for text training.</li>
-          <li>Train the text autoencoder.</li>
-          <li>Encode the full dataset into latent vectors.</li>
-          <li>Train the anomaly detector.</li>
-          <li>Evaluate anomaly scores.</li>
-          <li>Run the labeled analysis and live monitor.</li>
+          <li>Read the raw log file line-by-line</li>
+          <li>Extract the message portion (everything after HHMMSS)</li>
+          <li>Split into training (80%) and validation (20%) sets</li>
+          <li>Build a vocabulary of all unique words/tokens seen</li>
+          <li>Save prepared data and vocabulary for the next stage</li>
         </ol>
 
-        <div class="box">
-          <h3>Run order</h3>
-          <pre>sh dockerrun/run_prepare.sh /path/to/data /root/data
-sh dockerrun/run_text.sh /path/to/data /root/data
-sh dockerrun/run_encode.sh /path/to/data /root/data
-sh dockerrun/run_anomaly_train.sh /path/to/data /root/data
-sh dockerrun/run_anomaly_eval.sh /path/to/data /root/data</pre>
+        <h4>Example</h4>
+
+        <p>
+          Input raw log:
+        </p>
+
+        <pre><code>220115 14:23:45 BlockReport processing took 120ms for 50000 blocks from 192.168.1.100
+220115 14:23:46 Got block report from DataNode 192.168.1.100
+220115 14:23:47 Verification complete</code></pre>
+
+        <p>
+          Output prepared data:
+        </p>
+
+        <ul>
+          <li><code>train.txt</code>: Contains 80% of messages (with timestamps preserved for sorting)</li>
+          <li><code>val.txt</code>: Contains 20% of messages</li>
+          <li><code>vocab.pkl</code>: Dictionary mapping each unique word to an integer ID</li>
+        </ul>
+
+        <h4>Running Stage 1</h4>
+
+        <pre><code>bash dockerrun/run_text_autoencoder_prepare_data.sh</code></pre>
+
+        <p>
+          This runs the prepare module, which reads from your configured data directory and outputs to <code>prepared_data/</code>.
+        </p>
+
+        <h3>Stage 2: Text Encoding Training</h3>
+
+        <p>
+          <strong>Input:</strong> Prepared text (train.txt, val.txt) and vocabulary<br>
+          <strong>Output:</strong> Trained text autoencoder model<br>
+          <strong>Module:</strong> <code>src/tx/train.py</code>
+        </p>
+
+        <h4>What Happens</h4>
+
+        <p>
+          An LSTM autoencoder learns to compress log messages into dense vectors. Think of it as learning a "fingerprint" for each message type:
+        </p>
+
+        <ul>
+          <li>"BlockReport processing took 120ms" → [0.12, -0.45, 0.89, ...]</li>
+          <li>"Got block report from" → [0.34, 0.11, -0.23, ...]</li>
+          <li>"Verification complete" → [-0.56, 0.78, 0.01, ...]</li>
+        </ul>
+
+        <p>
+          The model learns these encodings by trying to reconstruct the original message from its compressed representation. Messages with similar meaning get similar vectors.
+        </p>
+
+        <h4>Training Details</h4>
+
+        <ul>
+          <li><strong>Epochs:</strong> Typically 10-20 passes through the data</li>
+          <li><strong>Batch size:</strong> 32-128 messages at a time</li>
+          <li><strong>Vector dimension:</strong> 64-128 dimensions (configurable)</li>
+          <li><strong>Learning rate:</strong> Adaptive, typically starts at 0.001</li>
+        </ul>
+
+        <p>
+          The model uses validation data to prevent overfitting. Training continues until validation loss plateaus.
+        </p>
+
+        <h4>Running Stage 2</h4>
+
+        <pre><code>bash dockerrun/run_text_autoencoder_train.sh</code></pre>
+
+        <p>
+          This trains the text encoder, saving the model to <code>text_autoencoder_model/</code>.
+        </p>
+
+        <h3>Stage 3: Dataset Encoding</h3>
+
+        <p>
+          <strong>Input:</strong> Trained text encoder and full dataset<br>
+          <strong>Output:</strong> Encoded vectors for all logs<br>
+          <strong>Module:</strong> <code>src/tx/encode.py</code>
+        </p>
+
+        <h4>What Happens</h4>
+
+        <p>
+          Now that we have a trained text encoder, we use it to encode every log message in our dataset into vectors. This transforms raw text into numbers that the anomaly detector can process.
+        </p>
+
+        <p>
+          For each message:
+        </p>
+
+        <ol>
+          <li>Tokenize the message (convert words to IDs)</li>
+          <li>Run through the encoder portion of the autoencoder</li>
+          <li>Get a vector output (e.g., 128 floats)</li>
+          <li>Save the vector</li>
+        </ol>
+
+        <h4>Input/Output Example</h4>
+
+        <p>
+          Input:
+        </p>
+
+        <pre><code>"BlockReport processing took 120ms for 50000 blocks"</code></pre>
+
+        <p>
+          After encoding:
+        </p>
+
+        <pre><code>[0.123, -0.456, 0.789, ..., 0.234]  # 128-dimensional vector</code></pre>
+
+        <h4>Running Stage 3</h4>
+
+        <pre><code>bash dockerrun/run_text_autoencoder_encode_dataset.sh</code></pre>
+
+        <p>
+          This encodes the entire dataset and saves pickled vectors to <code>encoded_dataset/</code>.
+        </p>
+
+        <h3>Stage 4: Anomaly Detector Training</h3>
+
+        <p>
+          <strong>Input:</strong> Encoded vectors<br>
+          <strong>Output:</strong> Trained anomaly detector model<br>
+          <strong>Module:</strong> <code>src/an/train.py</code>
+        </p>
+
+        <h4>What Happens</h4>
+
+        <p>
+          Now we have sequences of vectors. A bidirectional LSTM learns what normal temporal patterns look like:
+        </p>
+
+        <ul>
+          <li>Which messages typically follow which</li>
+          <li>How quickly things normally change</li>
+          <li>What rate of events is typical</li>
+        </ul>
+
+        <p>
+          The model is trained to predict the next vector given the previous ones. When it can predict accurately, the sequence is normal. When prediction error is high, something unusual is happening.
+        </p>
+
+        <h4>Training Process</h4>
+
+        <ul>
+          <li>Create sliding windows of sequences (e.g., 10-step windows)</li>
+          <li>For each window, predict the final step given the first 9 steps</li>
+          <li>Train on normal (training) data</li>
+          <li>Evaluate on validation data</li>
+          <li>Save the best model</li>
+        </ul>
+
+        <h4>Running Stage 4</h4>
+
+        <pre><code>bash dockerrun/run_anomaly_detector_train.sh</code></pre>
+
+        <p>
+          This trains the anomaly detector and saves it to <code>anomaly_trained_model/</code>.
+        </p>
+
+        <h3>Stage 5: Evaluation</h3>
+
+        <p>
+          <strong>Input:</strong> Trained detector and test data<br>
+          <strong>Output:</strong> Anomaly scores and evaluation metrics<br>
+          <strong>Module:</strong> <code>src/an/eval.py</code> or <code>src/an/analysis.py</code>
+        </p>
+
+        <h4>What Happens</h4>
+
+        <p>
+          We run the trained model on test data and score each log entry:
+        </p>
+
+        <ol>
+          <li>For each sequence in test data</li>
+          <li>Feed it to the trained detector</li>
+          <li>Get reconstruction error (how well the model predicted)</li>
+          <li>High error = anomalous, low error = normal</li>
+          <li>Save scores to file</li>
+        </ol>
+
+        <h4>Evaluation with Ground Truth</h4>
+
+        <p>
+          If you have labeled data (ground truth anomalies), run the labeled evaluation:
+        </p>
+
+        <pre><code>bash dockerrun/run_anomaly_detector_eval_labeled.sh</code></pre>
+
+        <p>
+          This computes:
+        </p>
+
+        <ul>
+          <li><strong>ROC curve:</strong> Trade-off between true positives and false positives</li>
+          <li><strong>AUC:</strong> Area under ROC curve (1.0 = perfect, 0.5 = random guessing)</li>
+          <li><strong>Precision:</strong> Of detected anomalies, how many are real?</li>
+          <li><strong>Recall:</strong> Of real anomalies, how many did we catch?</li>
+          <li><strong>F-beta score:</strong> Harmonic mean of precision and recall</li>
+        </ul>
+
+        <h3>Stage 6: Live Monitoring</h3>
+
+        <p>
+          <strong>Input:</strong> Incoming log stream and trained models<br>
+          <strong>Output:</strong> Real-time anomaly alerts<br>
+          <strong>Module:</strong> <code>src/live/main.py</code>
+        </p>
+
+        <h4>What Happens</h4>
+
+        <p>
+          The live monitor reads logs in real-time and scores them as they arrive:
+        </p>
+
+        <ol>
+          <li>Read incoming log messages</li>
+          <li>Encode each message using the text encoder</li>
+          <li>Score the vector using the anomaly detector</li>
+          <li>Track rolling statistics (mean, std of recent scores)</li>
+          <li>Alert when scores deviate from normal</li>
+        </ol>
+
+        <h4>Running Live Monitoring</h4>
+
+        <pre><code>bash dockerrun/run_live_monitoring.sh</code></pre>
+
+        <p>
+          The live monitor runs continuously, reading from a configured log file or stream and outputting alerts to the console or a monitoring system.
+        </p>
+
+        <h3>Running the Complete Pipeline</h3>
+
+        <p>
+          To run all stages in order:
+        </p>
+
+        <pre><code>#!/bin/bash
+# Run complete pipeline
+
+bash dockerrun/run_text_autoencoder_prepare_data.sh
+bash dockerrun/run_text_autoencoder_train.sh
+bash dockerrun/run_text_autoencoder_encode_dataset.sh
+bash dockerrun/run_anomaly_detector_train.sh
+bash dockerrun/run_anomaly_detector_eval.sh
+
+# Optionally, with ground truth evaluation:
+bash dockerrun/run_anomaly_detector_eval_labeled.sh
+
+# Start live monitoring:
+bash dockerrun/run_live_monitoring.sh
+</code></pre>
+
+        <div class="tip">
+          <strong>Tip:</strong> Each stage can take anywhere from seconds (small datasets) to hours (large production logs). Use a terminal multiplexer like <code>tmux</code> or <code>screen</code> to run stages in parallel on different systems.
+        </div>
+
+        <h3>Debugging Pipeline Issues</h3>
+
+        <p>
+          If a stage fails:
+        </p>
+
+        <ul>
+          <li><strong>Check logs:</strong> Each script outputs detailed logs showing exactly where it failed</li>
+          <li><strong>Verify input:</strong> Ensure the previous stage's output exists and is readable</li>
+          <li><strong>Check configuration:</strong> See Chapter 6 for config file details</li>
+          <li><strong>See Chapter 9:</strong> Troubleshooting guide for common errors</li>
+        </ul>
+
+        <div class="footer-nav">
+          <a href="03-data.html">Previous: Data and Files</a>
+          <a href="05-models.html">Next: Model Architecture</a>
         </div>
 
         <div class="footer-nav">

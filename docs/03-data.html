@@ -29,21 +29,260 @@
         </ul>
       </aside>
       <main class="content">
-        <h2 class="chapter-title">Data and files</h2>
-        <p class="chapter-meta">The project expects a data root folder with a <code>dockerconfig</code> subfolder and output folders created by the pipeline.</p>
+        <h2>Data and Log Formats</h2>
+        <p class="chapter-meta">Understanding the data: log formats, file structures, datasets, and how to prepare your own logs.</p>
 
-        <div class="box">
-          <h3>Important paths</h3>
-          <ul class="tight">
-            <li><code>dockerconfig/</code> stores runtime YAML files</li>
-            <li><code>prepared_data/</code> stores train and validation text data</li>
-            <li><code>encoded_dataset/</code> stores encoded pickles</li>
-            <li><code>anomaly_trained_model/</code> stores the anomaly model</li>
-            <li><code>text_autoencoder_model/</code> stores the text model</li>
-          </ul>
+        <h3>Log Data Fundamentals</h3>
+
+        <p>
+          DeepSentry works with <strong>structured text logs</strong>. A log is a sequence of messages, each typically on a single line, with consistent format. Examples:
+        </p>
+
+        <pre><code>2022-01-15 14:23:45 INFO Starting server on port 8080
+2022-01-15 14:23:46 INFO Loading configuration from /etc/app.conf
+2022-01-15 14:23:47 DEBUG Connecting to database at localhost:5432
+2022-01-15 14:23:48 INFO Database connection established
+2022-01-15 14:24:00 INFO Request received: GET /api/users/123
+2022-01-15 14:24:00 INFO Request processed: 45ms
+2022-01-15 14:24:01 INFO Request completed: 200 OK</code></pre>
+
+        <p>
+          Each message contains information about what the system did at a specific point in time. By analyzing sequences of these messages, DeepSentry learns the normal patterns of system behavior.
+        </p>
+
+        <h3>The HDFS Dataset (Built-in Example)</h3>
+
+        <p>
+          DeepSentry is validated on the <strong>HDFS-1 dataset</strong>, a collection of real logs from the Hadoop Distributed File System used at Yahoo. This dataset has become a benchmark for anomaly detection research because:
+        </p>
+
+        <ul>
+          <li><strong>Real production logs:</strong> From actual large-scale systems, not synthetic</li>
+          <li><strong>Labeled anomalies:</strong> Contains logs marked with anomaly ground truth</li>
+          <li><strong>Large scale:</strong> Millions of log entries spanning weeks of operation</li>
+          <li><strong>Diverse failures:</strong> Includes network failures, disk errors, timeouts, and other issues</li>
+        </ul>
+
+        <h4>HDFS Log Format</h4>
+
+        <p>
+          HDFS logs follow the Utah format (a standard in anomaly detection research):
+        </p>
+
+        <pre><code>YYMMDD HHMMSS MESSAGE TEXT
+</code></pre>
+
+        <p>
+          Example:
+        </p>
+
+        <pre><code>220115 14:23:45 HDFS-1 BlockReport processing took 120ms for 50000 blocks from 192.168.1.100
+220115 14:23:46 HDFS-1 Got block report from DataNode 192.168.1.100 with 50000 blocks
+220115 14:23:47 HDFS-1 Rescan of DataNode 192.168.1.100 finished
+220115 14:23:48 HDFS-1 BlockReport verification complete</code></pre>
+
+        <p>
+          Components:
+        </p>
+
+        <ul>
+          <li><strong>YYMMDD:</strong> Date (year-month-day)</li>
+          <li><strong>HHMMSS:</strong> Time (hour:minute:second)</li>
+          <li><strong>MESSAGE TEXT:</strong> The actual log message (arbitrary string)</li>
+        </ul>
+
+        <h4>Ground Truth Labels</h4>
+
+        <p>
+          The HDFS dataset includes <em>labeled anomalies</em>. Anomalies are linked to <strong>HDFS block IDs</strong>. A file containing mappings looks like:
+        </p>
+
+        <pre><code>blk_123456789: 1  # Block 123456789 contains an anomaly
+blk_987654321: 0  # Block 987654321 is normal
+blk_111111111: 1  # Block 111111111 contains an anomaly</code></pre>
+
+        <p>
+          DeepSentry uses these labels to evaluate model performance: "of all the blocks marked as anomalous, how many did we detect?"
+        </p>
+
+        <h3>Data Organization</h3>
+
+        <p>
+          The pipeline expects data organized in specific directories:
+        </p>
+
+        <h4>Input Directory Structure</h4>
+
+        <pre><code>data/
+├── raw_logs/
+│   ├── HDFS_1.log         # Raw log file in Utah format
+│   └── labels.txt         # Ground truth (optional, for evaluation)
+└── dockerconfig/          # Configuration files (provided by DeepSentry)
+    ├── train.yml
+    ├── encode.yml
+    ├── anomaly_train.yml
+    └── ...
+</code></pre>
+
+        <h4>Output Directories (Created by Pipeline)</h4>
+
+        <pre><code>data/
+├── prepared_data/
+│   ├── train.txt          # Training messages
+│   ├── val.txt            # Validation messages
+│   └── vocab.pkl          # Learned vocabulary
+│
+├── text_autoencoder_model/
+│   ├── encoder.h5         # Trained text encoder
+│   └── metadata.json
+│
+├── encoded_dataset/
+│   ├── train_encoded.pkl  # Encoded training vectors
+│   ├── val_encoded.pkl    # Encoded validation vectors
+│   └── test_encoded.pkl   # Encoded test vectors
+│
+├── anomaly_trained_model/
+│   ├── detector.h5        # Trained anomaly detector
+│   └── metadata.json
+│
+└── eval_results/
+    ├── anomaly_scores.pkl
+    ├── roc_curve.png
+    ├── precision_recall.png
+    └── metrics.json
+</code></pre>
+
+        <h3>Data Flow Through the Pipeline</h3>
+
+        <div class="diagram">
+RAW LOGS                      PREPARED DATA              ENCODED VECTORS
+HDFS_1.log                     prepared_data/
+"14:23:45 BlockReport..."  →   ├── train.txt       →    ├── train_encoded.pkl
+"14:23:46 Got block..."        ├── val.txt         →    ├── val_encoded.pkl
+"14:23:47 Verification..."     └── vocab.pkl       →    └── test_encoded.pkl
+
+
+                          TEXT AUTOENCODER
+                          "BlockReport... took 120ms"
+                          → [0.12, -0.45, 0.89, ...]
+
+ANOMALY TRAINING                LIVE SCORING
+Train vectors              →     Stream incoming vectors
+anomaly_model.h5           →     Score each vector
+                                 Flag high-scoring sequences
         </div>
 
-        <p>The configuration loader replaces the <code>{ROOT_DATA_DIR}</code> placeholder with the path you pass on the command line.</p>
+        <h3>Preparing Your Own Logs</h3>
+
+        <p>
+          To use DeepSentry with logs from your own systems:
+        </p>
+
+        <h4>Step 1: Export Your Logs</h4>
+
+        <p>
+          Export logs from your system in a text file, one log entry per line. The format must be:
+        </p>
+
+        <pre><code>YYMMDD HHMMSS MESSAGE TEXT</code></pre>
+
+        <p>
+          For example, from a web server:
+        </p>
+
+        <pre><code>220115 14:23:45 GET /api/users - 200 OK - 45ms
+220115 14:23:46 POST /api/users - 201 Created - 120ms
+220115 14:23:47 GET /api/users/123 - 200 OK - 23ms
+220115 14:23:48 Database connection timeout
+220115 14:23:49 Retry attempt 1 for user lookup</code></pre>
+
+        <h4>Step 2: Ensure Clean Training Data</h4>
+
+        <p>
+          The training set should represent <strong>normal system behavior</strong>. If your training data contains anomalies, the model will learn wrong patterns.
+        </p>
+
+        <div class="warning">
+          <strong>Critical:</strong> Anomaly detection works by learning normal patterns. If your training data is contaminated with anomalies, the model will consider anomalies "normal" and fail to detect them.
+        </div>
+
+        <p>
+          Tips for clean data:
+        </p>
+
+        <ul>
+          <li>Use logs from a period when the system was known to be healthy</li>
+          <li>Remove obvious errors and failures from training data</li>
+          <li>Train on at least 1 week of logs (more is better)</li>
+          <li>Separate test data from training data (don't overlap)</li>
+        </ul>
+
+        <h4>Step 3: Split into Train/Test</h4>
+
+        <p>
+          Divide your logs into:
+        </p>
+
+        <ul>
+          <li><strong>Training set (80%):</strong> Used to learn normal patterns. Should be clean.</li>
+          <li><strong>Test set (20%):</strong> Used to evaluate performance. Can contain anomalies.</li>
+        </ul>
+
+        <p>
+          The <code>prepare.py</code> script does this automatically, taking the first 80% as training and last 20% as validation.
+        </p>
+
+        <h3>File Size Considerations</h3>
+
+        <p>
+          Log files can be large. Here's what to expect:
+        </p>
+
+        <table>
+          <tr>
+            <th>File Type</th>
+            <th>Typical Size</th>
+            <th>Memory Impact</th>
+          </tr>
+          <tr>
+            <td>Raw logs (1 week)</td>
+            <td>100 MB - 1 GB</td>
+            <td>Streamed (low memory)</td>
+          </tr>
+          <tr>
+            <td>Prepared text data</td>
+            <td>50-500 MB</td>
+            <td>Loaded into memory</td>
+          </tr>
+          <tr>
+            <td>Encoded vectors</td>
+            <td>10-100 MB</td>
+            <td>Loaded into memory</td>
+          </tr>
+          <tr>
+            <td>Trained models</td>
+            <td>5-50 MB</td>
+            <td>Single model in memory</td>
+          </tr>
+        </table>
+
+        <div class="tip">
+          <strong>Tip:</strong> Even multi-GB log files can be processed thanks to streaming. The pipeline reads logs line-by-line without loading everything into memory at once.
+        </div>
+
+        <h3>Dataset Requirements Checklist</h3>
+
+        <div class="note">
+          <strong>Before running the pipeline, ensure:</strong>
+          <ul>
+            <li>☐ You have raw logs in Utah format (YYMMDD HHMMSS MESSAGE)</li>
+            <li>☐ Training logs are from a known-healthy period</li>
+            <li>☐ Test logs are separate from training data</li>
+            <li>☐ You have at least 1 week of log data (more is better)</li>
+            <li>☐ Logs are in a single text file, one entry per line</li>
+            <li>☐ You have ground truth labels for evaluation (optional but recommended)</li>
+          </ul>
+        </div>
 
         <div class="footer-nav">
           <a href="02-installation.html">Previous: Installation</a>
