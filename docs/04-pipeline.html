@@ -9,11 +9,21 @@
 <body>
   <div class="frame">
     <div class="banner">
-      <h1>DeepSentry</h1>
-      <p>Chapter 4, Pipeline</p>
+      <div class="banner-left">
+        <h1>DeepSentry</h1>
+        <p>Chapter 4, The Pipeline</p>
+      </div>
+      <div class="banner-right">
+        <a href="https://github.com/keirsalterego/deepsentry" class="github-link" target="_blank" rel="noopener noreferrer">
+          <svg class="github-icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57C20.565 21.795 24 17.31 24 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          GitHub
+        </a>
+      </div>
     </div>
     <div class="layout">
-                        <aside class="nav">
+      <aside class="nav">
         <h2>Table of Contents</h2>
         
         <h3>Getting Started</h3>
@@ -67,120 +77,96 @@
         </p>
 
         <div class="diagram">
-┌──────────────┐
-│   RAW LOGS   │
-│  HDFS_1.log  │
-└──────┬───────┘
-       │
+<pre>
+┌──────────────────────┐
+│      RAW LOGS        │
+│     HDFS_1.log       │
+└──────────┬───────────┘
+           │
   [STAGE 1: PREPARE]
-       │
-       ├─→ Split into train/val
-       ├─→ Extract messages
-       └─→ Build vocabulary
-       │
-       ▼
+           │
+           ├─→ Split into train/val
+           ├─→ Extract messages
+           └─→ Build vocabulary
+           │
+           ▼
 ┌──────────────────────┐
 │ PREPARED TEXT DATA   │
 │ • train.txt          │
 │ • val.txt            │
 │ • vocab.pkl          │
-└──────┬───────────────┘
-       │
+└──────────┬───────────┘
+           │
   [STAGE 2: TEXT TRAINING]
   LSTM Autoencoder
-       │
-       ├─→ Learn text patterns
-       ├─→ Compression to 128 dims
-       └─→ Reconstruction quality
-       │
-       ▼
+           │
+           ├─→ Learn text patterns
+           ├─→ Compression to 128 dims
+           └─→ Reconstruction quality
+           │
+           ▼
 ┌──────────────────────┐
 │  TEXT AUTOENCODER    │
 │ • encoder.h5         │
 │ • decoder.h5         │
 │ • metadata.json      │
-└──────┬───────────────┘
-       │
+└──────────┬───────────┘
+           │
   [STAGE 3: DATASET ENCODE]
-       │
-       ├─→ Compress all logs
-       ├─→ Create sequences
-       └─→ Save vectors
-       │
-       ▼
+           │
+           ├─→ Compress all logs
+           ├─→ Create sequences
+           └─→ Save vectors
+           │
+           ▼
 ┌──────────────────────┐
 │ ENCODED SEQUENCES    │
 │ • train_encoded.pkl  │
 │ • val_encoded.pkl    │
 │ • test_encoded.pkl   │
-└──────┬───────────────┘
-       │
+└──────────┬───────────┘
+           │
   [STAGE 4: ANOMALY TRAINING]
   Bidirectional LSTM
-       │
-       ├─→ Learn temporal patterns
-       ├─→ Predict next sequence
-       └─→ Calculate errors
-       │
-       ▼
+           │
+           ├─→ Learn temporal patterns
+           ├─→ Predict next sequence
+           └─→ Calculate errors
+           │
+           ▼
 ┌──────────────────────┐
 │ ANOMALY DETECTOR     │
 │ • detector.h5        │
 │ • threshold.json     │
 │ • metadata.json      │
-└──────┬───────────────┘
-       │
+└──────────┬───────────┘
+           │
   [STAGE 5: EVALUATION]
-       │
-       ├─→ Calculate AUC/metrics
-       ├─→ Generate ROC curve
-       └─→ Create report
-       │
-       ▼
+           │
+           ├─→ Calculate AUC/metrics
+           ├─→ Generate ROC curve
+           └─→ Create report
+           │
+           ▼
 ┌──────────────────────┐
 │  EVAL RESULTS        │
 │ • metrics.json       │
 │ • roc_curve.png      │
 │ • precision_recall.* │
-└──────┬───────────────┘
-       │
+└──────────┬───────────┘
+           │
   [STAGE 6: LIVE MONITORING]
-       │
-       ├─→ Load models
-       ├─→ Score incoming logs
-       └─→ Alert on anomalies
-       │
-       ▼
-    [ALERTS & MONITORING]
-        </div>
-         │
-         ▼
-┌────────────────────────┐
-│ Anomaly Detector       │
-│ detector.h5            │
-│ bidirectional LSTM     │
-└────────┬───────────────┘
-         │
-    [Stage 5: EVALUATION]
-    Score test set, compute metrics
-         │
-         ▼
-┌────────────────────────┐
-│ Anomaly Scores         │
-│ • scores.pkl           │
-│ • roc_curve.png        │
-│ • metrics.json         │
-└────────┬───────────────┘
-         │
-    [Stage 6: LIVE MONITORING]
-    Stream incoming logs and score
-         │
-         ▼
-┌────────────────────────┐
-│ Real-time Alerts       │
-│ Anomalies detected     │
-│ & flagged online       │
-└────────────────────────┘
+           │
+           ├─→ Load models
+           ├─→ Score incoming logs
+           └─→ Alert on anomalies
+           │
+           ▼
+┌──────────────────────┐
+│   REAL-TIME ALERTS   │
+│  Anomalies flagged   │
+└──────────────────────┘
+</pre>
         </div>
 
         <h3>Stage 1: Data Preparation</h3>
@@ -461,27 +447,9 @@ bash dockerrun/run_live_monitoring.sh
           <strong>Tip:</strong> Each stage can take anywhere from seconds (small datasets) to hours (large production logs). Use a terminal multiplexer like <code>tmux</code> or <code>screen</code> to run stages in parallel on different systems.
         </div>
 
-        <h3>Debugging Pipeline Issues</h3>
-
-        <p>
-          If a stage fails:
-        </p>
-
-        <ul>
-          <li><strong>Check logs:</strong> Each script outputs detailed logs showing exactly where it failed</li>
-          <li><strong>Verify input:</strong> Ensure the previous stage's output exists and is readable</li>
-          <li><strong>Check configuration:</strong> See Chapter 6 for config file details</li>
-          <li><strong>See Chapter 9:</strong> Troubleshooting guide for common errors</li>
-        </ul>
-
         <div class="footer-nav">
           <a href="03-data.html">Previous: Data and Files</a>
           <a href="05-models.html">Next: Model Architecture</a>
-        </div>
-
-        <div class="footer-nav">
-          <a href="03-data.html">Previous: Data and files</a>
-          <a href="05-models.html">Next: Model architecture</a>
         </div>
       </main>
     </div>
