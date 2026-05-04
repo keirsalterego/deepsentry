@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 def test_repository_has_book_docs():
-    assert Path("docs/book.html").is_file()
+    assert Path("docs/index.html").is_file()
 
 
 def test_short_package_directories_exist():

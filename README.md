@@ -212,14 +212,14 @@ deepsentry/
 |   +-- test_smoke.py                   one (1) test. it's a start.
 |
 +-- docs/
-    +-- book.html                       the full lore
+    +-- index.html                       the full lore
 ```
 
 ---
 
 ## Documentation
 
-The full documentation book is at [`docs/book.html`](docs/book.html). It covers setup,
+The full documentation book is at [`docs/index.html`](docs/index.html). It covers setup,
 pipeline stages, model architecture, configuration, live monitoring, and troubleshooting.
 
 It was written by people who had read too many log files. It shows, but in a good way.

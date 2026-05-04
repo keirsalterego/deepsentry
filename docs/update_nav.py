@@ -38,7 +38,7 @@ nav_template = '''      <aside class="nav">
         
         <h2>Quick Links</h2>
         <div class="small">
-          <div><a href="book.html">Start page</a></div>
+          <div><a href="index.html">Start page</a></div>
           <div><a href="../README.md">README.md</a></div>
           <div><a href="../Dockerfile">Dockerfile</a></div>
           <div><a href="../LICENSE">MIT License</a></div>
