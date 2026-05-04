@@ -29,24 +29,410 @@
         </ul>
       </aside>
       <main class="content">
-        <h2 class="chapter-title">Configuration</h2>
-        <p class="chapter-meta">Configuration files live under <code>dockerconfig</code> and are loaded through <code>src/config_loader.py</code>.</p>
+        <h2>Configuration: Tuning the System</h2>
+        <p class="chapter-meta">How to configure every aspect of DeepSentry: model parameters, data paths, logging, and tuning for your specific logs.</p>
 
-        <div class="box">
-          <h3>Available config files</h3>
-          <ul class="tight">
-            <li><code>prepare.yml</code></li>
-            <li><code>train.yml</code></li>
-            <li><code>encode.yml</code></li>
-            <li><code>anomaly_train.yml</code></li>
-            <li><code>anomaly_eval.yml</code></li>
-            <li><code>anomaly_eval_labeled.yml</code></li>
-            <li><code>live.yml</code></li>
-            <li><code>logging_config.yml</code></li>
+        <h3>Configuration Overview</h3>
+
+        <p>
+          All configuration happens through YAML files in <code>dockerconfig/</code>. Each stage of the pipeline has its own config file:
+        </p>
+
+        <table>
+          <tr>
+            <th>Stage</th>
+            <th>Config File</th>
+            <th>Purpose</th>
+          </tr>
+          <tr>
+            <td>Prepare</td>
+            <td>text_autoencoder_prepare_data.yml</td>
+            <td>Data preparation parameters</td>
+          </tr>
+          <tr>
+            <td>Text Training</td>
+            <td>text_autoencoder_train.yml</td>
+            <td>Text autoencoder architecture</td>
+          </tr>
+          <tr>
+            <td>Text Encoding</td>
+            <td>text_autoencoder_dataset_encoder.yml</td>
+            <td>Encoding the full dataset</td>
+          </tr>
+          <tr>
+            <td>Anomaly Training</td>
+            <td>anomaly_detector_train.yml</td>
+            <td>Anomaly detector architecture</td>
+          </tr>
+          <tr>
+            <td>Anomaly Eval</td>
+            <td>anomaly_detector_eval.yml</td>
+            <td>Test-time evaluation</td>
+          </tr>
+          <tr>
+            <td>Labeled Eval</td>
+            <td>anomaly_detector_eval_labeled.yml</td>
+            <td>Evaluation with ground truth</td>
+          </tr>
+          <tr>
+            <td>Live Monitoring</td>
+            <td>live_monitoring_config.yml</td>
+            <td>Real-time detection parameters</td>
+          </tr>
+          <tr>
+            <td>Logging</td>
+            <td>logging_config.yml</td>
+            <td>Output and debugging options</td>
+          </tr>
+        </table>
+
+        <h3>Understanding Config Files</h3>
+
+        <p>
+          Config files use YAML format with placeholders and typed values:
+        </p>
+
+        <pre><code>parameters:
+  root_dir: {ROOT_DATA_DIR}  # Replaced at runtime
+  name: "my_experiment"      # String
+  epochs: 10                 # Integer
+  dropout: 0.2               # Float
+  bidirectional: true        # Boolean
+  paths:                     # List
+    - /path/one
+    - /path/two
+  nested:                    # Dictionary
+    key1: value1
+    key2: value2
+</code></pre>
+
+        <h3>The Config Loader</h3>
+
+        <p>
+          <code>src/config_loader.py</code> handles all config loading. It:
+        </p>
+
+        <ol>
+          <li>Loads YAML file</li>
+          <li>Replaces <code>{ROOT_DATA_DIR}</code> placeholder with actual path</li>
+          <li>Validates required keys are present</li>
+          <li>Provides easy dictionary access to all values</li>
+        </ol>
+
+        <p>
+          Usage in code:
+        </p>
+
+        <pre><code>from src.config_loader import Config
+
+config = Config.load_from_file(
+    "dockerconfig/text_autoencoder_train.yml",
+    root_data_dir="/path/to/data"
+)
+
+epochs = config.get("epochs", default=10)
+embedding_size = config.get("embedding_size", default=64)
+output_dir = config.get_path("output_model_dir")
+</code></pre>
+
+        <h3>Key Configuration Parameters</h3>
+
+        <h4>Text Autoencoder Prepare</h4>
+
+        <pre><code">
+# text_autoencoder_prepare_data.yml
+
+parameters:
+  root_dir: {ROOT_DATA_DIR}
+  raw_log_file: "{ROOT_DATA_DIR}/HDFS_1.log"
+  raw_log_labels: "{ROOT_DATA_DIR}/labels.txt"
+  
+  # Data splitting
+  training_log_data_fraction: 0.8  # 80% for training
+  
+  # Output locations
+  prepared_data_dir: "{ROOT_DATA_DIR}/prepared_data"
+  
+  # Vocabulary limits
+  min_word_count: 1      # Include words appearing at least once
+  max_vocab_size: 10000  # Limit to top 10k words
+        </code></pre>
+
+        <p>
+          Key parameters:
+        </p>
+
+        <ul>
+          <li><code>training_log_data_fraction:</code> Split ratio (0.8 = 80% train, 20% validate)</li>
+          <li><code>min_word_count:</code> Ignore rare words. Higher = smaller vocabulary, faster training</li>
+          <li><code>max_vocab_size:</code> Hard limit on vocabulary. Prevents memory issues on huge datasets</li>
+        </ul>
+
+        <h4>Text Autoencoder Training</h4>
+
+        <pre><code>
+# text_autoencoder_train.yml
+
+parameters:
+  root_dir: {ROOT_DATA_DIR}
+  
+  # Architecture
+  embedding_size: 64              # Size of word vectors
+  encoder_hidden_size: 128        # LSTM hidden dimension
+  
+  # Bottleneck (latent representation)
+  encoder_output_size: 128        # Compressed vector size
+  
+  # Training
+  epochs: 10                      # Full passes through data
+  batch_size: 32                  # Samples per update
+  dropout: 0.2                    # Regularization (prevents overfitting)
+  
+  # Learning
+  learning_rate: 0.001            # Gradient descent step size
+  validation_split: 0.2           # Use 20% of data for validation
+  
+  # Bidirectional option
+  bidirectional: false            # Use forward+backward LSTM
+  
+  # Checkpointing
+  save_best_only: true            # Keep best model during training
+  
+  # Output
+  output_model_dir: "{ROOT_DATA_DIR}/text_autoencoder_model"
+        </code></pre>
+
+        <p>
+          Tuning guide:
+        </p>
+
+        <ul>
+          <li><strong>embedding_size:</strong> Larger = more expressive but slower. Try 32-256.</li>
+          <li><strong>encoder_output_size:</strong> The bottleneck compression. Larger = less loss. Try 64-256.</li>
+          <li><strong>epochs:</strong> How many passes through training data. More = better but slower. Try 5-20.</li>
+          <li><strong>dropout:</strong> Prevents overfitting. Try 0.1-0.5. Higher = more regularization.</li>
+          <li><strong>bidirectional:</strong> Use forward+backward for better understanding. Slower but better quality.</li>
+        </ul>
+
+        <h4>Anomaly Detector Training</h4>
+
+        <pre><code>
+# anomaly_detector_train.yml
+
+parameters:
+  root_dir: {ROOT_DATA_DIR}
+  
+  # Architecture
+  lstm_hidden_size: 64            # LSTM internal dimension
+  num_layers: 1                   # Number of LSTM layers
+  dropout: 0.2                    # Dropout between layers
+  
+  # Sequence modeling
+  sequence_length: 10             # Length of windows for training
+  bidirectional: true             # Forward + backward processing
+  
+  # Training
+  epochs: 10
+  batch_size: 32
+  learning_rate: 0.001
+  
+  # Checkpointing
+  save_best_only: true
+  
+  # Input/output
+  encoded_data_dir: "{ROOT_DATA_DIR}/encoded_dataset"
+  output_model_dir: "{ROOT_DATA_DIR}/anomaly_trained_model"
+        </code></pre>
+
+        <p>
+          Tuning guide:
+        </p>
+
+        <ul>
+          <li><strong>lstm_hidden_size:</strong> Capacity to learn patterns. Larger = more learning capacity but slower. Try 32-256.</li>
+          <li><strong>sequence_length:</strong> How many past vectors to use. Longer = captures longer patterns. Try 5-50.</li>
+          <li><strong>num_layers:</strong> Stack multiple LSTMs. Try 1-3. More = more expressive but harder to train.</li>
+          <li><strong>bidirectional:</strong> Usually true for anomaly detection (use context both ways).</li>
+        </ul>
+
+        <h4>Anomaly Evaluation</h4>
+
+        <pre><code>
+# anomaly_detector_eval.yml
+
+parameters:
+  root_dir: {ROOT_DATA_DIR}
+  
+  # Models to use
+  text_encoder_model: "{ROOT_DATA_DIR}/text_autoencoder_model/encoder.h5"
+  anomaly_model: "{ROOT_DATA_DIR}/anomaly_trained_model/detector.h5"
+  
+  # Test data
+  encoded_test_data: "{ROOT_DATA_DIR}/encoded_dataset/test_encoded.pkl"
+  
+  # Scoring parameters
+  sequence_length: 10             # Must match training length
+  threshold: 0.5                  # For binary classification
+  
+  # Output
+  output_dir: "{ROOT_DATA_DIR}/eval_results"
+        </code></pre>
+
+        <h4>Live Monitoring</h4>
+
+        <pre><code>
+# live_monitoring_config.yml
+
+parameters:
+  root_dir: {ROOT_DATA_DIR}
+  
+  # Models
+  text_encoder_model: "{ROOT_DATA_DIR}/text_autoencoder_model/encoder.h5"
+  anomaly_model: "{ROOT_DATA_DIR}/anomaly_trained_model/detector.h5"
+  vocabulary: "{ROOT_DATA_DIR}/prepared_data/vocab.pkl"
+  
+  # Input log stream
+  log_file: "/var/log/myapp.log"  # Or /dev/stdin for piping
+  tail_mode: true                  # Start from end of file
+  
+  # Scoring
+  sequence_length: 10
+  window_size: 100                 # Sliding window for baseline stats
+  threshold: 2.5                   # Alert if score > 2.5 std devs above mean
+  
+  # Output
+  output_file: "/var/log/anomalies.log"
+  verbose: true                    # Print all scores or just alerts
+        </code></pre>
+
+        <h3>Customizing for Your Logs</h3>
+
+        <h4>Example: Web Server Logs</h4>
+
+        <p>
+          You have web server logs like:
+        </p>
+
+        <pre><code>220115 14:23:45 GET /api/users 200 45ms
+220115 14:23:46 POST /api/users 201 120ms
+220115 14:23:47 GET /api/health 200 2ms
+        </code></pre>
+
+        <p>
+          Recommended configuration adjustments:
+        </p>
+
+        <pre><code>
+# Shorter sequences (web requests are short-lived)
+sequence_length: 5                # Instead of 10
+
+# Smaller models (logs are consistent)
+lstm_hidden_size: 32              # Instead of 64
+embedding_size: 32                # Instead of 64
+
+# More aggressive anomaly threshold
+threshold: 2.0                    # Requests are mostly uniform, easy to detect deviations
+
+# Shorter training period
+epochs: 5                         # 1 day of logs is enough
+batch_size: 64                    # Smaller batches for faster convergence
+        </code></pre>
+
+        <h4>Example: Distributed System Logs (Like HDFS)</h4>
+
+        <p>
+          You have complex multi-node logs where messages come from different components:
+        </p>
+
+        <pre><code>
+# Longer sequences (distributed systems have longer patterns)
+sequence_length: 20               # Instead of 10
+
+# Larger models (complex patterns)
+lstm_hidden_size: 128             # Instead of 64
+embedding_size: 128               # Instead of 64
+encoder_output_size: 256          # Larger bottleneck
+
+# More nuanced anomaly threshold
+threshold: 3.0                    # Distributed systems have more variance
+
+# Longer training period
+epochs: 20                        # Need more data to understand all nodes
+bidirectional: true               # Important to understand context
+batch_size: 16                    # Smaller batches for stability
+        </code></pre>
+
+        <h3>Best Practices for Configuration</h3>
+
+        <div class="note">
+          <strong>Configuration Tips:</strong>
+          <ul>
+            <li>Start with defaults, then tune based on results</li>
+            <li>Use smaller datasets for initial experiments</li>
+            <li>Track which config changes improve performance</li>
+            <li>Don't over-tune on test data (that's data leakage)</li>
+            <li>Document changes in git</li>
           </ul>
         </div>
 
-        <p>The loader replaces <code>{ROOT_DATA_DIR}</code> with the path you pass at runtime, so the same configs can work in Docker and local setups.</p>
+        <h4>Parameter Tuning Workflow</h4>
+
+        <ol>
+          <li><strong>Baseline:</strong> Run with default config</li>
+          <li><strong>Experiment:</strong> Change one parameter at a time</li>
+          <li><strong>Evaluate:</strong> Check metrics on validation set</li>
+          <li><strong>Decide:</strong> Keep change if better, revert if worse</li>
+          <li><strong>Repeat:</strong> Try next parameter</li>
+        </ol>
+
+        <h4>Common Tuning Scenarios</h4>
+
+        <p>
+          <strong>Problem: Model training is slow</strong>
+        </p>
+
+        <ul>
+          <li>Reduce epochs</li>
+          <li>Reduce hidden_size</li>
+          <li>Increase batch_size</li>
+          <li>Use GPU (Chapter 2)</li>
+        </ul>
+
+        <p>
+          <strong>Problem: Model is overfitting (bad validation performance)</strong>
+        </p>
+
+        <ul>
+          <li>Increase dropout</li>
+          <li>Reduce hidden_size</li>
+          <li>Reduce epochs</li>
+          <li>Reduce encoder_output_size</li>
+        </ul>
+
+        <p>
+          <strong>Problem: Too many false positives (alerts for normal events)</strong>
+        </p>
+
+        <ul>
+          <li>Increase threshold</li>
+          <li>Increase sequence_length (longer context)</li>
+          <li>More training data (ensure it's clean)</li>
+        </ul>
+
+        <p>
+          <strong>Problem: Missed anomalies (low detection rate)</strong>
+        </p>
+
+        <ul>
+          <li>Decrease threshold</li>
+          <li>Increase embedding_size / hidden_size</li>
+          <li>Increase epochs</li>
+          <li>Check for anomalies in training data</li>
+        </ul>
+
+        <div class="footer-nav">
+          <a href="05-models.html">Previous: Model Architecture</a>
+          <a href="07-live.html">Next: Live Monitoring</a>
 
         <div class="footer-nav">
           <a href="05-models.html">Previous: Model architecture</a>

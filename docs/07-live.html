@@ -29,25 +29,427 @@
         </ul>
       </aside>
       <main class="content">
-        <h2 class="chapter-title">Live monitoring</h2>
-        <p class="chapter-meta">The live loop streams log lines, encodes them, scores them, and prints anomalies with a running threshold.</p>
+        <h2>Live Monitoring: Real-Time Anomaly Detection</h2>
+        <p class="chapter-meta">Running DeepSentry in production: streaming logs, real-time scoring, alerts, and integration patterns.</p>
 
-        <div class="box">
-          <h3>Important behavior</h3>
-          <ul class="tight">
-            <li>Time based batching uses a configurable interval</li>
-            <li>Encoded lines are normalized with a cosine time transform</li>
-            <li>Rolling stats are used to adjust the anomaly threshold</li>
-          </ul>
+        <h3>What is Live Monitoring?</h3>
+
+        <p>
+          After training your models, you want to continuously monitor new logs. Live monitoring:
+        </p>
+
+        <ol>
+          <li>Reads incoming log entries in real-time</li>
+          <li>Encodes each message using the trained text autoencoder</li>
+          <li>Scores each sequence using the anomaly detector</li>
+          <li>Alerts when anomaly scores exceed a threshold</li>
+          <li>Maintains rolling statistics for adaptive thresholding</li>
+        </ol>
+
+        <div class="diagram">
+┌──────────────────────────────────────────────┐
+│     LIVE MONITORING PIPELINE                 │
+└──────────────────────────────────────────────┘
+
+Incoming Log Stream
+        │
+        ▼
+┌──────────────────┐
+│  Read Log Entry  │
+│ "Got block..."   │
+└──────────────────┘
+        │
+        ▼
+┌──────────────────────────┐
+│ Encode with Text Model   │
+│ → [0.12, -0.45, ...]    │
+└──────────────────────────┘
+        │
+        ▼
+┌──────────────────────────┐
+│ Add to Sequence Window   │
+│ [v1, v2, ..., v10]      │
+└──────────────────────────┘
+        │
+        ▼
+┌──────────────────────────┐
+│ Score with Anomaly Model │
+│ Error = 0.23             │
+└──────────────────────────┘
+        │
+        ▼
+┌──────────────────────────┐
+│ Compare to Threshold     │
+│ 0.23 < 2.5? NORMAL      │
+│ 0.23 > 2.5? ANOMALY! ⚠   │
+└──────────────────────────┘
+        │
+        ▼
+┌──────────────────────────┐
+│ Output Alert (if anomaly)│
+│ Log + Score + Context    │
+└──────────────────────────┘
         </div>
 
-        <p>The live code is still a good place for future production hardening, especially around input validation and graceful shutdown handling.</p>
+        <h3>Running Live Monitoring</h3>
+
+        <h4>Basic Execution</h4>
+
+        <pre><code>bash dockerrun/run_live_monitoring.sh</code></pre>
+
+        <p>
+          The live monitor starts and reads logs according to configuration. Output looks like:
+        </p>
+
+        <pre><code>[14:23:45] Normal - score: 0.12 - "Got block report from..."
+[14:23:46] Normal - score: 0.09 - "Verification complete"
+[14:23:47] ANOMALY - score: 3.45 - "Unexpected error" ⚠️
+[14:23:48] Normal - score: 0.14 - "Retrying connection..."
+        </code></pre>
+
+        <h4>Input Sources</h4>
+
+        <p>
+          Configure in <code>live_monitoring_config.yml</code>:
+        </p>
+
+        <pre><code>
+# From a file
+log_file: /var/log/myapp.log
+tail_mode: true   # Start from end (watch for new entries)
+
+# From stdin (pipe logs in)
+log_file: /dev/stdin
+
+# From network socket (with socat)
+log_file: /dev/tcp/localhost/9999
+        </code></pre>
+
+        <h4>Piping Logs in Real-Time</h4>
+
+        <p>
+          Forward logs from a source:
+        </p>
+
+        <pre><code>
+# From syslog
+tail -f /var/log/syslog | bash dockerrun/run_live_monitoring.sh
+
+# From application stderr
+./myapp 2>&1 | bash dockerrun/run_live_monitoring.sh
+
+# From remote server via SSH
+ssh user@remote "tail -f /var/log/app.log" | bash dockerrun/run_live_monitoring.sh
+        </code></pre>
+
+        <h3>Adaptive Thresholding</h3>
+
+        <p>
+          The live monitor doesn't use a fixed threshold. Instead, it maintains running statistics:
+        </p>
+
+        <ul>
+          <li><strong>Window:</strong> Last N scores (e.g., 100 most recent)</li>
+          <li><strong>Mean:</strong> Average of recent scores</li>
+          <li><strong>Std Dev:</strong> How much scores vary</li>
+          <li><strong>Threshold:</strong> mean + 2.5 * std_dev</li>
+        </ul>
+
+        <p>
+          Why this matters: Even if "normal" anomaly scores slowly increase (due to seasonal changes or system evolution), the threshold adapts.
+        </p>
+
+        <h4>Example</h4>
+
+        <p>
+          Hour 1: Scores are [0.1, 0.2, 0.15, 0.3, ...]. Mean=0.17, Std=0.08. Threshold = 0.17 + 2.5*0.08 = 0.37
+        </p>
+
+        <p>
+          Hour 2: Scores are [0.2, 0.25, 0.22, 0.4, ...]. Mean=0.27, Std=0.09. Threshold = 0.27 + 2.5*0.09 = 0.495
+        </p>
+
+        <p>
+          The threshold moved up because baseline scores increased. This prevents "threshold exhaustion" where all scores become anomalies.
+        </p>
+
+        <h3>Output and Alerting</h3>
+
+        <h4>Console Output</h4>
+
+        <p>
+          By default, the live monitor outputs to console:
+        </p>
+
+        <pre><code>[14:23:45] Normal  - score: 0.21 (threshold: 2.45)
+[14:23:46] ANOMALY - score: 3.67 (threshold: 2.45) ⚠️
+[14:23:47] Normal  - score: 0.18 (threshold: 2.45)</code></pre>
+
+        <h4>File Output</h4>
+
+        <p>
+          Configure in <code>live_monitoring_config.yml</code>:
+        </p>
+
+        <pre><code>
+output_file: /var/log/deepsentry-alerts.log
+        </code></pre>
+
+        <p>
+          Anomalies are written with full context:
+        </p>
+
+        <pre><code>TIMESTAMP=2022-01-15T14:23:47Z
+SCORE=3.67
+THRESHOLD=2.45
+MESSAGE="Unexpected error in database connection"
+CONTEXT_WINDOW="Got block report... → Verification complete → Unexpected error"
+        </code></pre>
+
+        <h4>Integration with Monitoring Systems</h4>
+
+        <p>
+          Direct integration patterns:
+        </p>
+
+        <pre><code>
+# Send alerts to syslog
+bash dockerrun/run_live_monitoring.sh | \
+  grep ANOMALY | \
+  logger -t deepsentry -p user.alert
+
+# Send to Prometheus (custom exporter)
+bash dockerrun/run_live_monitoring.sh | \
+  ./alert_to_prometheus.py
+
+# Send to monitoring webhook
+bash dockerrun/run_live_monitoring.sh | \
+  grep ANOMALY | \
+  while read line; do
+    curl -X POST https://alerts.example.com/webhook \
+      -d "$line"
+  done
+        </code></pre>
+
+        <h3>Tuning Live Monitoring</h3>
+
+        <h4>Key Parameters</h4>
+
+        <table>
+          <tr>
+            <th>Parameter</th>
+            <th>Default</th>
+            <th>Impact</th>
+          </tr>
+          <tr>
+            <td>threshold_multiplier</td>
+            <td>2.5</td>
+            <td>How many std devs above mean triggers alert. Higher = fewer alerts.</td>
+          </tr>
+          <tr>
+            <td>window_size</td>
+            <td>100</td>
+            <td>How many recent scores to use for statistics. Larger = more stable threshold.</td>
+          </tr>
+          <tr>
+            <td>sequence_length</td>
+            <td>10</td>
+            <td>Must match training. How many vectors in a sequence.</td>
+          </tr>
+          <tr>
+            <td>batch_interval</td>
+            <td>1.0 (seconds)</td>
+            <td>How often to score new logs. Smaller = more frequent scoring.</td>
+          </tr>
+        </table>
+
+        <h4>Tuning Strategy</h4>
+
+        <p>
+          Start with defaults, then adjust based on your alerts:
+        </p>
+
+        <ul>
+          <li><strong>Too many false positives:</strong> Increase threshold_multiplier (e.g., 3.0 or 3.5)</li>
+          <li><strong>Missing real anomalies:</strong> Decrease threshold_multiplier (e.g., 2.0 or 1.5)</li>
+          <li><strong>Threshold too volatile:</strong> Increase window_size (e.g., 200 or 500)</li>
+          <li><strong>Slow to adapt to changes:</strong> Decrease window_size (e.g., 50)</li>
+        </ul>
+
+        <h3>Production Deployment</h3>
+
+        <h4>Systemd Service</h4>
+
+        <p>
+          Run as a systemd service for automatic restart:
+        </p>
+
+        <pre><code>
+# /etc/systemd/system/deepsentry-live.service
+
+[Unit]
+Description=DeepSentry Live Anomaly Detection
+After=network.target
+
+[Service]
+Type=simple
+User=deepsentry
+WorkingDirectory=/opt/deepsentry
+ExecStart=bash dockerrun/run_live_monitoring.sh
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+        </code></pre>
+
+        <p>
+          Enable and start:
+        </p>
+
+        <pre><code>sudo systemctl enable deepsentry-live
+sudo systemctl start deepsentry-live
+sudo systemctl status deepsentry-live
+        </code></pre>
+
+        <h4>Docker Container</h4>
+
+        <p>
+          Run live monitoring in Docker:
+        </p>
+
+        <pre><code>
+docker run -d \
+  --name deepsentry-live \
+  -v /var/log:/var/log:ro \
+  -v /data/deepsentry:/data \
+  --restart unless-stopped \
+  deepsentry:latest \
+  python src/live/main.py
+        </code></pre>
+
+        <h4>Kubernetes Deployment</h4>
+
+        <p>
+          For cloud deployments:
+        </p>
+
+        <pre><code>
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deepsentry-live
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: deepsentry-live
+  template:
+    metadata:
+      labels:
+        app: deepsentry-live
+    spec:
+      containers:
+      - name: live
+        image: deepsentry:latest
+        volumeMounts:
+        - name: logs
+          mountPath: /var/log
+          readOnly: true
+        - name: models
+          mountPath: /data/models
+          readOnly: true
+        env:
+        - name: LOG_FILE
+          value: /var/log/app.log
+        - name: ANOMALY_MODEL
+          value: /data/models/detector.h5
+      volumes:
+      - name: logs
+        hostPath:
+          path: /var/log
+      - name: models
+        configMap:
+          name: deepsentry-models
+        </code></pre>
+
+        <h3>Monitoring the Monitor</h3>
+
+        <p>
+          Keep an eye on the live monitoring process itself:
+        </p>
+
+        <pre><code>
+# Check if process is running
+ps aux | grep deepsentry
+
+# Monitor resource usage
+watch -n 1 'docker stats deepsentry-live'
+
+# Check for errors in logs
+tail -f /var/log/deepsentry-alerts.log | grep ERROR
+
+# Alert stats
+tail -f /var/log/deepsentry-alerts.log | grep ANOMALY | wc -l
+        </code></pre>
+
+        <h3>Common Issues and Solutions</h3>
+
+        <h4>Problem: No alerts even for obvious anomalies</h4>
+
+        <p>
+          <strong>Check:</strong>
+        </p>
+
+        <ul>
+          <li>Models are loaded correctly (check logs for errors)</li>
+          <li>Sequence length matches training config</li>
+          <li>Log format is correct (YYMMDD HHMMSS MESSAGE)</li>
+          <li>Threshold is too high</li>
+        </ul>
+
+        <h4>Problem: Too many false positive alerts</h4>
+
+        <p>
+          <strong>Solutions:</strong>
+        </p>
+
+        <ul>
+          <li>Increase threshold_multiplier in config</li>
+          <li>Increase window_size for more stable baseline</li>
+          <li>Check that training data was clean (no anomalies)</li>
+          <li>Verify test logs are similar distribution to training logs</li>
+        </ul>
+
+        <h4>Problem: Memory or CPU usage is high</h4>
+
+        <p>
+          <strong>Optimizations:</strong>
+        </p>
+
+        <ul>
+          <li>Reduce sequence_length if possible</li>
+          <li>Use smaller models (reduce embedding_size)</li>
+          <li>Increase batch_interval to score less frequently</li>
+          <li>Use GPU acceleration if available</li>
+        </ul>
+
+        <h3>Next Steps</h3>
+
+        <p>
+          Once live monitoring is running:
+        </p>
+
+        <ul>
+          <li>Set up alerting to send anomalies to your on-call team</li>
+          <li>Create dashboards showing anomaly detection rate and latency</li>
+          <li>Periodically retrain models with new data to stay current</li>
+          <li>Investigate flagged anomalies to understand patterns</li>
+        </ul>
 
         <div class="footer-nav">
           <a href="06-config.html">Previous: Configuration</a>
           <a href="08-reference.html">Next: Reference</a>
-        </div>
-      </main>
     </div>
   </div>
 </body>
