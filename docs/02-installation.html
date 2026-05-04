@@ -29,28 +29,114 @@
         </ul>
       </aside>
       <main class="content">
-        <h2 class="chapter-title">Installation</h2>
-        <p class="chapter-meta">The project is designed to run inside Docker, with a local Python environment available for tests and docs.</p>
+        <h2>Installation</h2>
+        <p class="chapter-meta">This chapter covers all the ways to install and run DeepSentry. Choose the method that works best for your environment.</p>
 
-        <table>
-          <tr><th>Item</th><th>Purpose</th></tr>
-          <tr><td>Docker</td><td>Primary runtime for training and evaluation</td></tr>
-          <tr><td>Python venv</td><td>Local smoke tests and doc maintenance</td></tr>
-          <tr><td>CUDA GPU</td><td>Useful for larger training jobs</td></tr>
-        </table>
+        <h3>Prerequisites</h3>
 
-        <div class="box">
-          <h3>Quick start</h3>
-          <pre>./build.sh .
-sh dockerrun/run_prepare.sh /path/to/data /root/data
-sh dockerrun/run_text.sh /path/to/data /root/data</pre>
-        </div>
+        <p>
+          Before starting, make sure you have:
+        </p>
 
-        <p>The next chapter explains the expected data folder layout.</p>
+        <ul>
+          <li><strong>Python 3.6+:</strong> The codebase uses Python 3.6 or newer. Check your version with <code>python --version</code></li>
+          <li><strong>Git:</strong> To clone the repository. Check with <code>git --version</code></li>
+          <li><strong>Bash or Zsh:</strong> For running shell scripts</li>
+          <li><strong>~500 MB of disk space:</strong> For Python packages and sample models</li>
+        </ul>
+
+        <p>
+          Depending on your installation method, you may also need:
+        </p>
+
+        <ul>
+          <li><strong>Docker (for Docker setup):</strong> Version 20.10+ recommended</li>
+          <li><strong>CUDA/GPU support (optional):</strong> For training on GPUs, requires CUDA 11.0+ and NVIDIA GPU</li>
+          <li><strong>Virtual environment (for local setup):</strong> Python venv or virtualenv</li>
+        </ul>
+
+        <h3>Method 1: Docker (Recommended for First-Time Users)</h3>
+
+        <p>
+          Docker is the easiest way to get started. It provides a complete, self-contained environment with all dependencies.
+        </p>
+
+        <h4>Step 1: Clone the Repository</h4>
+
+        <pre><code>git clone https://github.com/yourorg/deepsentry.git
+cd deepsentry</code></pre>
+
+        <h4>Step 2: Build the Docker Image</h4>
+
+        <pre><code>bash docker_image_build.sh</code></pre>
+
+        <p>
+          This builds a Docker image with Python 3.8, TensorFlow, Keras, and all required dependencies.
+        </p>
+
+        <h4>Step 3: Verify the Installation</h4>
+
+        <pre><code>docker run -it deepsentry:latest python --version</code></pre>
+
+        <h4>Running Commands in Docker</h4>
+
+        <p>
+          Use the provided scripts in <code>dockerrun/</code> to run training and evaluation.
+        </p>
+
+        <h3>Method 2: Local Installation with Virtual Environment</h3>
+
+        <p>
+          For development or local execution:
+        </p>
+
+        <h4>Step 1: Clone and Create Virtual Environment</h4>
+
+        <pre><code>git clone https://github.com/yourorg/deepsentry.git
+cd deepsentry
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate</code></pre>
+
+        <h4>Step 2: Install Dependencies</h4>
+
+        <pre><code>pip install --upgrade pip
+pip install -r requirements.txt</code></pre>
+
+        <h4>Step 3: Verify Installation</h4>
+
+        <pre><code>python -c "import tensorflow; print(tensorflow.__version__)"
+pytest t/ -v</code></pre>
+
+        <h3>Method 3: GPU Support</h3>
+
+        <p>
+          For NVIDIA GPU acceleration, install GPU-specific dependencies after Method 2:
+        </p>
+
+        <pre><code>pip install --upgrade tensorflow[and-cuda]
+python -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"</code></pre>
+
+        <h3>Project Structure</h3>
+
+        <p>
+          After installation:
+        </p>
+
+        <pre><code>deepsentry/
+├── src/
+│   ├── tx/               # Text encoding
+│   ├── an/               # Anomaly detection
+│   ├── live/             # Live monitoring
+│   └── ...
+├── ta/                   # Text autoencoder
+├── kad/                  # Keras anomaly detector
+├── dockerconfig/         # Config files
+├── dockerrun/            # Run scripts
+└── docs/                 # Documentation</code></pre>
 
         <div class="footer-nav">
           <a href="01-introduction.html">Previous: Introduction</a>
-          <a href="03-data.html">Next: Data and files</a>
+          <a href="03-data.html">Next: Data and Files</a>
         </div>
       </main>
     </div>

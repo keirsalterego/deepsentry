@@ -17,7 +17,7 @@
         <h2>Contents</h2>
         <ul>
           <li><a href="book.html">Start page</a></li>
-          <li><a href="01-introduction.html">1. Introduction</a></li>
+          <li><a href="01-introduction.html"><strong>1. Introduction</strong></a></li>
           <li><a href="02-installation.html">2. Installation</a></li>
           <li><a href="03-data.html">3. Data and files</a></li>
           <li><a href="04-pipeline.html">4. Pipeline</a></li>
@@ -29,27 +29,219 @@
         </ul>
       </aside>
       <main class="content">
-        <h2 class="chapter-title">Introduction</h2>
-        <p class="chapter-meta">The project learns a baseline of normal behavior from raw log data and flags deviations as potential anomalies.</p>
+        <h2>Introduction</h2>
+        <p class="chapter-meta">Welcome to DeepSentry: Unsupervised Anomaly Detection in System Logs. This chapter introduces the problem we're solving, the approach we take, and what you'll learn in this book.</p>
 
-        <p>The repository implements the experiment pipeline from the original paper and repackages it with shorter names and a cleaner documentation surface.</p>
+        <h3>The Problem: Finding Needles in Digital Haystacks</h3>
+        
+        <p>
+          System logs are everywhere. Your servers, databases, applications, and network devices generate thousands or millions of log events every hour. These logs contain valuable information about what your systems are doing—both the normal, expected behavior and the unusual or problematic behavior.
+        </p>
+
+        <p>
+          Traditional approaches to monitoring and security rely on <em>rule-based detection</em>: you write explicit rules for every attack or failure mode you want to catch. For example:
+        </p>
+
+        <ul>
+          <li>Rule: "If authentication fails 10 times in 5 minutes, alert."</li>
+          <li>Rule: "If disk usage exceeds 95%, alert."</li>
+          <li>Rule: "If we see this specific error code, alert."</li>
+        </ul>
+
+        <p>
+          This works well when you know exactly what you're looking for. But it has critical limitations:
+        </p>
 
         <div class="box">
-          <h3>Core idea</h3>
-          <p>Instead of trying to teach the system every attack, the model learns what normal looks like. Anything outside that learned pattern is treated as suspicious.</p>
-        </div>
-
-        <div class="box">
-          <h3>Important modules</h3>
-          <ul class="tight">
-            <li><code>src/raw_log_file_process.py</code> parses log lines</li>
-            <li><code>src/tx</code> handles text encoding stages</li>
-            <li><code>src/an</code> handles anomaly scoring and evaluation</li>
-            <li><code>src/live/main.py</code> runs streaming monitoring</li>
+          <h4>Limitations of Rule-Based Detection</h4>
+          <ul>
+            <li><strong>Unknown unknowns:</strong> You can only detect attacks or failures you've already defined. Zero-day exploits and novel failure modes fall through the cracks.</li>
+            <li><strong>False positives:</strong> Rules are binary and brittle. A legitimate burst of activity might trigger an alert meant for attacks.</li>
+            <li><strong>Maintenance burden:</strong> As your systems evolve, rules must be constantly updated and tuned.</li>
+            <li><strong>Context blindness:</strong> Simple rules can't understand the normal pattern of your specific system—one system's anomaly is another's Tuesday.</li>
+            <li><strong>Alert fatigue:</strong> When rules generate too many false positives, operators stop trusting them.</li>
           </ul>
         </div>
 
-        <p>The next chapter shows how to set up the environment and run the project.</p>
+        <h3>The Unsupervised Learning Approach</h3>
+
+        <p>
+          DeepSentry takes a fundamentally different approach using <strong>unsupervised anomaly detection</strong>. Instead of writing rules for known attacks, we train a deep neural network to <em>learn what normal looks like</em> from your logs.
+        </p>
+
+        <p>
+          Here's the key insight: <strong>normal behavior is structured and repetitive</strong>. Your systems follow predictable patterns. Log messages have consistent formats. Related messages appear in sequences. Once we understand those patterns, we can identify when something deviates from them.
+        </p>
+
+        <div class="note">
+          <strong>The Core Idea:</strong> We don't need labeled data saying "this is an attack" or "this is a failure." We only need clean log data that represents normal system operation. The model learns the baseline, and anything that doesn't fit the learned pattern is treated as suspicious.
+        </div>
+
+        <h4>Why Unsupervised Learning?</h4>
+
+        <p>
+          In supervised learning, you need labeled training data: "this is normal, that is anomalous." For logs, this labeling is expensive and often impossible. Who goes back and labels millions of log entries? When? How do you know you've captured all anomaly types?
+        </p>
+
+        <p>
+          Unsupervised learning removes that bottleneck. You can train on any clean log data you have, without expensive annotation. This makes the approach:
+        </p>
+
+        <ul>
+          <li><strong>Practical:</strong> Works with data you already have</li>
+          <li><strong>Adaptive:</strong> Can detect novel anomalies, not just known patterns</li>
+          <li><strong>Scalable:</strong> New systems can be monitored without waiting for labeled data</li>
+          <li><strong>Low-friction:</strong> No ongoing labeling or rule maintenance</li>
+        </ul>
+
+        <h3>How DeepSentry Works: The High-Level View</h3>
+
+        <p>
+          DeepSentry uses a two-stage approach combining deep autoencoders for text encoding and LSTM networks for time-series anomaly detection:
+        </p>
+
+        <div class="diagram">
+┌─────────────────────────────────────────────────────────────┐
+│                      DEEPSENTRY PIPELINE                     │
+└─────────────────────────────────────────────────────────────┘
+
+STAGE 1: TEXT ENCODING
+  Raw Logs → [LSTM Autoencoder] → Compressed Vectors
+  "kernel panic detected"       → [0.12, -0.45, 0.89, ...]
+  "disk space low"               → [0.34, 0.11, -0.23, ...]
+  
+STAGE 2: ANOMALY DETECTION
+  Time-Series Vectors → [Bidirectional LSTM] → Reconstruction Error
+  [0.12, 0.34, ...] → 0.02 (normal)
+  [0.15, 0.89, ...] → 0.78 (anomaly!)
+
+OUTPUT: Anomaly Scores & Live Alerts
+        </div>
+
+        <p>
+          Here's what happens at each stage:
+        </p>
+
+        <h4>Stage 1: Learning Text Patterns (Text Autoencoder)</h4>
+        <p>
+          Log messages are free-form text. An LSTM autoencoder learns to compress messages into fixed-size vectors that capture their semantic meaning. A message about disk space and a message about authentication failures get very different vectors. The autoencoder learns which messages are similar and how they differ.
+        </p>
+
+        <h4>Stage 2: Learning Temporal Patterns (Anomaly Detector)</h4>
+        <p>
+          Logs occur in sequences over time. A bidirectional LSTM learns what normal temporal patterns look like: which messages typically follow which, what's a normal rate of events, how quickly things should change. When the actual sequence deviates from the learned pattern, the model signals an anomaly.
+        </p>
+
+        <h4>Stage 3: Real-Time Monitoring (Live Engine)</h4>
+        <p>
+          Once trained, the model runs continuously, scoring incoming logs in real-time. Operators see anomaly scores and can investigate high-scoring events immediately.
+        </p>
+
+        <div class="example">
+          <strong>Example:</strong>
+          <p>
+            Suppose your log baseline includes the normal pattern: "app started → listening on port 8080 → request received → request processed → request completed." If a log sequence shows "app started → listening on port 8080 → memory exhausted → crash," this deviates from learned patterns and will receive a high anomaly score.
+          </p>
+        </div>
+
+        <h3>What You'll Learn</h3>
+
+        <div class="learning-outcomes">
+          <h4>By working through this book, you'll understand:</h4>
+          <ul>
+            <li><strong>The theory:</strong> How autoencoders and LSTMs work, why they're suited for this problem, and how to interpret their outputs</li>
+            <li><strong>The pipeline:</strong> Each stage of processing—data preparation, text encoding, anomaly detection, and live monitoring</li>
+            <li><strong>The implementation:</strong> How to prepare log data, train models, tune hyperparameters, and evaluate performance</li>
+            <li><strong>Deployment:</strong> How to run the system in production, monitor it, and integrate it with your infrastructure</li>
+            <li><strong>Advanced techniques:</strong> Custom log formats, transfer learning, performance optimization, and integration patterns</li>
+          </ul>
+        </div>
+
+        <h3>Who This Book Is For</h3>
+
+        <p>
+          DeepSentry is designed for:
+        </p>
+
+        <ul>
+          <li><strong>DevOps/SRE Engineers:</strong> Who want to detect anomalies and failures in their systems without maintaining hundreds of alert rules</li>
+          <li><strong>Security Teams:</strong> Who want to detect novel attacks and suspicious behavior in system logs</li>
+          <li><strong>Data Scientists/ML Engineers:</strong> Who want to understand the architecture and possibly extend or customize it</li>
+          <li><strong>System Architects:</strong> Who want to understand anomaly detection as a tool in their monitoring stack</li>
+        </ul>
+
+        <p>
+          You should have basic familiarity with:
+        </p>
+
+        <ul>
+          <li>Command-line tools and shell scripting</li>
+          <li>Python programming (basic level)</li>
+          <li>System logs and log formats</li>
+          <li>Basic machine learning concepts (optional but helpful)</li>
+        </ul>
+
+        <div class="tip">
+          <strong>Tip:</strong> You don't need deep ML expertise to use and deploy DeepSentry. But Chapter 5 (Model Architecture) provides detailed explanations if you want to understand the internals.
+        </div>
+
+        <h3>How to Use This Book</h3>
+
+        <p>
+          This book is structured to take you from zero to production:
+        </p>
+
+        <ul>
+          <li><strong>Chapters 2-3:</strong> Getting started. Installation and data preparation.</li>
+          <li><strong>Chapters 4-5:</strong> Understanding the system. How the pipeline works and why models are structured this way.</li>
+          <li><strong>Chapters 6-7:</strong> Running it. Configuration and live monitoring.</li>
+          <li><strong>Chapter 8:</strong> API reference for developers.</li>
+          <li><strong>Chapter 9:</strong> Troubleshooting common issues.</li>
+          <li><strong>Advanced chapters:</strong> Customization, transfer learning, and integration patterns.</li>
+        </ul>
+
+        <p>
+          You can read this sequentially, or jump to chapters relevant to your current task. Cross-references link related sections.
+        </p>
+
+        <h3>A Bit of History</h3>
+
+        <p>
+          DeepSentry is based on research by researchers at the University of Utah. The core algorithms were published in peer-reviewed venues and validated on real system logs (specifically, HDFS logs from Yahoo's data centers). This book packages that research with practical implementations and modern infrastructure (Docker, configuration files, live monitoring).
+        </p>
+
+        <p>
+          The project brings together:
+        </p>
+
+        <ul>
+          <li>Deep learning (TensorFlow/Keras for neural networks)</li>
+          <li>Natural language processing (LSTM autoencoders for text)</li>
+          <li>Time-series analysis (bidirectional LSTM for sequences)</li>
+          <li>Systems knowledge (understanding logs and monitoring)</li>
+        </ul>
+
+        <h3>Setting Expectations</h3>
+
+        <div class="warning">
+          <strong>Important:</strong> DeepSentry is a powerful tool, but it's not magic. It learns from training data, so:
+          <ul>
+            <li>Quality training data matters. If your "normal" logs contain anomalies, the model learns wrong patterns.</li>
+            <li>It's designed to detect deviations from learned patterns, not to identify specific attack types.</li>
+            <li>It should be part of your monitoring stack, not the only component.</li>
+            <li>It requires tuning. Different systems have different normal patterns.</li>
+          </ul>
+        </div>
+
+        <p>
+          Think of it as a specialized sensor: highly sensitive to pattern changes, but requiring interpretation by humans who understand your systems.
+        </p>
+
+        <h3>Moving Forward</h3>
+
+        <p>
+          The next chapter covers installation. You'll set up the environment, either locally or via Docker, and prepare to run your first experiment.
+        </p>
 
         <div class="footer-nav">
           <a href="book.html">Previous: Start page</a>
