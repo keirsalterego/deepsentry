@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DeepSentry Book, Pipeline</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="frame">
+    <div class="banner">
+      <h1>DeepSentry</h1>
+      <p>Chapter 4, Pipeline</p>
+    </div>
+    <div class="layout">
+      <aside class="nav">
+        <h2>Contents</h2>
+        <ul>
+          <li><a href="book.html">Start page</a></li>
+          <li><a href="01-introduction.html">1. Introduction</a></li>
+          <li><a href="02-installation.html">2. Installation</a></li>
+          <li><a href="03-data.html">3. Data and files</a></li>
+          <li><a href="04-pipeline.html">4. Pipeline</a></li>
+          <li><a href="05-models.html">5. Model architecture</a></li>
+          <li><a href="06-config.html">6. Configuration</a></li>
+          <li><a href="07-live.html">7. Live monitoring</a></li>
+          <li><a href="08-reference.html">8. Reference</a></li>
+          <li><a href="09-troubleshooting.html">9. Troubleshooting</a></li>
+        </ul>
+      </aside>
+      <main class="content">
+        <h2 class="chapter-title">Pipeline</h2>
+        <p class="chapter-meta">The pipeline is staged, with each step writing output that feeds the next step.</p>
+
+        <ol>
+          <li>Prepare raw logs for text training.</li>
+          <li>Train the text autoencoder.</li>
+          <li>Encode the full dataset into latent vectors.</li>
+          <li>Train the anomaly detector.</li>
+          <li>Evaluate anomaly scores.</li>
+          <li>Run the labeled analysis and live monitor.</li>
+        </ol>
+
+        <div class="box">
+          <h3>Run order</h3>
+          <pre>sh dockerrun/run_prepare.sh /path/to/data /root/data
+sh dockerrun/run_text.sh /path/to/data /root/data
+sh dockerrun/run_encode.sh /path/to/data /root/data
+sh dockerrun/run_anomaly_train.sh /path/to/data /root/data
+sh dockerrun/run_anomaly_eval.sh /path/to/data /root/data</pre>
+        </div>
+
+        <div class="footer-nav">
+          <a href="03-data.html">Previous: Data and files</a>
+          <a href="05-models.html">Next: Model architecture</a>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

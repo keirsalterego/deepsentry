@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DeepSentry Book</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="frame">
+    <div class="banner">
+      <h1>DeepSentry</h1>
+      <p>Unsupervised anomaly detection in distributed system logs. This manual is written as a simple book so it can be read from start to finish.</p>
+    </div>
+    <div class="layout">
+      <aside class="nav">
+        <h2>Contents</h2>
+        <ul>
+          <li><a href="01-introduction.html">1. Introduction</a></li>
+          <li><a href="02-installation.html">2. Installation</a></li>
+          <li><a href="03-data.html">3. Data and files</a></li>
+          <li><a href="04-pipeline.html">4. Pipeline</a></li>
+          <li><a href="05-models.html">5. Model architecture</a></li>
+          <li><a href="06-config.html">6. Configuration</a></li>
+          <li><a href="07-live.html">7. Live monitoring</a></li>
+          <li><a href="08-reference.html">8. Reference</a></li>
+          <li><a href="09-troubleshooting.html">9. Troubleshooting</a></li>
+        </ul>
+        <h2>Project files</h2>
+        <div class="small">
+          <div><a href="../README.md">README.md</a></div>
+          <div><a href="../src/config_loader.py">src/config_loader.py</a></div>
+          <div><a href="style.css">docs/style.css</a></div>
+        </div>
+      </aside>
+      <main class="content">
+        <h2 class="chapter-title">Start here</h2>
+        <p class="chapter-meta">A plain documentation front page, intended to feel like an older project manual.</p>
+
+        <div class="box">
+          <h3>What this project does</h3>
+          <p>DeepSentry trains a text autoencoder on raw log messages, encodes the resulting sequences, then scores anomalies using a recurrent autoencoder model.</p>
+        </div>
+
+        <div class="box">
+          <h3>What is already implemented</h3>
+          <ul class="tight">
+            <li>Log preprocessing and tokenization</li>
+            <li>Text autoencoder training</li>
+            <li>Dataset encoding and anomaly scoring</li>
+            <li>Labeled evaluation and plots</li>
+            <li>Live monitoring loop</li>
+            <li>Docker based execution</li>
+          </ul>
+        </div>
+
+        <div class="box">
+          <h3>What still remains for a production grade release</h3>
+          <ul class="tight">
+            <li>Broader tests</li>
+            <li>More validation on inputs and config values</li>
+            <li>A proper CLI wrapper</li>
+            <li>Packaging metadata</li>
+            <li>Continuous integration beyond the smoke test</li>
+          </ul>
+        </div>
+
+        <p>Read the chapters in order, or jump directly from the table of contents on the left.</p>
+
+        <div class="footer-nav">
+          <span></span>
+          <a href="01-introduction.html">Next: Introduction</a>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

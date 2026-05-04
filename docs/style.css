@@ -1,0 +1,161 @@
+body {
+  margin: 0;
+  background: #d9d9d9;
+  color: #222;
+  font-family: Georgia, "Times New Roman", serif;
+  line-height: 1.5;
+}
+
+a {
+  color: #004a99;
+  text-decoration: underline;
+}
+
+a:hover {
+  text-decoration: none;
+}
+
+.frame {
+  max-width: 1180px;
+  margin: 0 auto;
+  background: #fff;
+  border-left: 1px solid #bfbfbf;
+  border-right: 1px solid #bfbfbf;
+  min-height: 100vh;
+}
+
+.banner {
+  background: #efefef;
+  border-bottom: 1px solid #bfbfbf;
+  padding: 18px 24px;
+}
+
+.banner h1 {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: normal;
+}
+
+.banner p {
+  margin: 6px 0 0;
+  color: #444;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+}
+
+.nav {
+  background: #f5f5f5;
+  border-right: 1px solid #c8c8c8;
+  padding: 20px;
+}
+
+.nav h2 {
+  font-size: 1.05rem;
+  margin: 0 0 12px;
+  border-bottom: 1px solid #c8c8c8;
+  padding-bottom: 8px;
+}
+
+.nav ul {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 18px;
+}
+
+.nav li {
+  margin: 0 0 8px;
+}
+
+.nav .small {
+  font-size: 0.92rem;
+  color: #555;
+}
+
+.content {
+  padding: 24px 28px 36px;
+}
+
+.chapter-title {
+  margin: 0 0 10px;
+  font-size: 1.7rem;
+  font-weight: normal;
+  border-bottom: 1px solid #d4d4d4;
+  padding-bottom: 8px;
+}
+
+.chapter-meta {
+  margin: 0 0 18px;
+  color: #666;
+  font-size: 0.95rem;
+}
+
+.box {
+  border: 1px solid #c8c8c8;
+  background: #fbfbfb;
+  padding: 14px 16px;
+  margin: 16px 0;
+}
+
+.box h3 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+}
+
+code,
+pre {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.95rem;
+}
+
+pre {
+  background: #f4f4f4;
+  border: 1px solid #c8c8c8;
+  padding: 14px;
+  overflow: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0 18px;
+}
+
+th,
+td {
+  border: 1px solid #c8c8c8;
+  padding: 8px 10px;
+  vertical-align: top;
+}
+
+th {
+  background: #efefef;
+  text-align: left;
+}
+
+.footer-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid #d4d4d4;
+  margin-top: 28px;
+  padding-top: 14px;
+  font-size: 0.95rem;
+}
+
+ul.tight li {
+  margin-bottom: 6px;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .nav {
+    border-right: 0;
+    border-bottom: 1px solid #c8c8c8;
+  }
+}

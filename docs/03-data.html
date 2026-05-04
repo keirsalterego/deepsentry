@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DeepSentry Book, Data and files</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="frame">
+    <div class="banner">
+      <h1>DeepSentry</h1>
+      <p>Chapter 3, Data and files</p>
+    </div>
+    <div class="layout">
+      <aside class="nav">
+        <h2>Contents</h2>
+        <ul>
+          <li><a href="book.html">Start page</a></li>
+          <li><a href="01-introduction.html">1. Introduction</a></li>
+          <li><a href="02-installation.html">2. Installation</a></li>
+          <li><a href="03-data.html">3. Data and files</a></li>
+          <li><a href="04-pipeline.html">4. Pipeline</a></li>
+          <li><a href="05-models.html">5. Model architecture</a></li>
+          <li><a href="06-config.html">6. Configuration</a></li>
+          <li><a href="07-live.html">7. Live monitoring</a></li>
+          <li><a href="08-reference.html">8. Reference</a></li>
+          <li><a href="09-troubleshooting.html">9. Troubleshooting</a></li>
+        </ul>
+      </aside>
+      <main class="content">
+        <h2 class="chapter-title">Data and files</h2>
+        <p class="chapter-meta">The project expects a data root folder with a <code>dockerconfig</code> subfolder and output folders created by the pipeline.</p>
+
+        <div class="box">
+          <h3>Important paths</h3>
+          <ul class="tight">
+            <li><code>dockerconfig/</code> stores runtime YAML files</li>
+            <li><code>prepared_data/</code> stores train and validation text data</li>
+            <li><code>encoded_dataset/</code> stores encoded pickles</li>
+            <li><code>anomaly_trained_model/</code> stores the anomaly model</li>
+            <li><code>text_autoencoder_model/</code> stores the text model</li>
+          </ul>
+        </div>
+
+        <p>The configuration loader replaces the <code>{ROOT_DATA_DIR}</code> placeholder with the path you pass on the command line.</p>
+
+        <div class="footer-nav">
+          <a href="02-installation.html">Previous: Installation</a>
+          <a href="04-pipeline.html">Next: Pipeline</a>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

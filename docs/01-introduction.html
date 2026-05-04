@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DeepSentry Book, Introduction</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="frame">
+    <div class="banner">
+      <h1>DeepSentry</h1>
+      <p>Chapter 1, Introduction</p>
+    </div>
+    <div class="layout">
+      <aside class="nav">
+        <h2>Contents</h2>
+        <ul>
+          <li><a href="book.html">Start page</a></li>
+          <li><a href="01-introduction.html">1. Introduction</a></li>
+          <li><a href="02-installation.html">2. Installation</a></li>
+          <li><a href="03-data.html">3. Data and files</a></li>
+          <li><a href="04-pipeline.html">4. Pipeline</a></li>
+          <li><a href="05-models.html">5. Model architecture</a></li>
+          <li><a href="06-config.html">6. Configuration</a></li>
+          <li><a href="07-live.html">7. Live monitoring</a></li>
+          <li><a href="08-reference.html">8. Reference</a></li>
+          <li><a href="09-troubleshooting.html">9. Troubleshooting</a></li>
+        </ul>
+      </aside>
+      <main class="content">
+        <h2 class="chapter-title">Introduction</h2>
+        <p class="chapter-meta">The project learns a baseline of normal behavior from raw log data and flags deviations as potential anomalies.</p>
+
+        <p>The repository implements the experiment pipeline from the original paper and repackages it with shorter names and a cleaner documentation surface.</p>
+
+        <div class="box">
+          <h3>Core idea</h3>
+          <p>Instead of trying to teach the system every attack, the model learns what normal looks like. Anything outside that learned pattern is treated as suspicious.</p>
+        </div>
+
+        <div class="box">
+          <h3>Important modules</h3>
+          <ul class="tight">
+            <li><code>src/raw_log_file_process.py</code> parses log lines</li>
+            <li><code>src/tx</code> handles text encoding stages</li>
+            <li><code>src/an</code> handles anomaly scoring and evaluation</li>
+            <li><code>src/live/main.py</code> runs streaming monitoring</li>
+          </ul>
+        </div>
+
+        <p>The next chapter shows how to set up the environment and run the project.</p>
+
+        <div class="footer-nav">
+          <a href="book.html">Previous: Start page</a>
+          <a href="02-installation.html">Next: Installation</a>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

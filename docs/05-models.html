@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DeepSentry Book, Model architecture</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="frame">
+    <div class="banner">
+      <h1>DeepSentry</h1>
+      <p>Chapter 5, Model architecture</p>
+    </div>
+    <div class="layout">
+      <aside class="nav">
+        <h2>Contents</h2>
+        <ul>
+          <li><a href="book.html">Start page</a></li>
+          <li><a href="01-introduction.html">1. Introduction</a></li>
+          <li><a href="02-installation.html">2. Installation</a></li>
+          <li><a href="03-data.html">3. Data and files</a></li>
+          <li><a href="04-pipeline.html">4. Pipeline</a></li>
+          <li><a href="05-models.html">5. Model architecture</a></li>
+          <li><a href="06-config.html">6. Configuration</a></li>
+          <li><a href="07-live.html">7. Live monitoring</a></li>
+          <li><a href="08-reference.html">8. Reference</a></li>
+          <li><a href="09-troubleshooting.html">9. Troubleshooting</a></li>
+        </ul>
+      </aside>
+      <main class="content">
+        <h2 class="chapter-title">Model architecture</h2>
+        <p class="chapter-meta">The project combines a text autoencoder with a recurrent anomaly detector.</p>
+
+        <table>
+          <tr><th>Stage</th><th>Purpose</th></tr>
+          <tr><td>Text autoencoder</td><td>Compresses log messages into a learned latent representation</td></tr>
+          <tr><td>Sequence model</td><td>Scores encoded sequences for unusual reconstruction behavior</td></tr>
+          <tr><td>Live detector</td><td>Applies rolling anomaly checks to incoming log lines</td></tr>
+        </table>
+
+        <div class="box">
+          <h3>Code areas</h3>
+          <ul class="tight">
+            <li><code>ta/</code> contains the text autoencoder package</li>
+            <li><code>kad/</code> contains the recurrent anomaly model package</li>
+            <li><code>src/tx</code> combines encoding and dataset preparation</li>
+            <li><code>src/an</code> handles scoring and analysis</li>
+          </ul>
+        </div>
+
+        <div class="footer-nav">
+          <a href="04-pipeline.html">Previous: Pipeline</a>
+          <a href="06-config.html">Next: Configuration</a>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
