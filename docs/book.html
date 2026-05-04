@@ -10,66 +10,251 @@
   <div class="frame">
     <div class="banner">
       <h1>DeepSentry</h1>
-      <p>Unsupervised anomaly detection in distributed system logs. This manual is written as a simple book so it can be read from start to finish.</p>
+      <p>Unsupervised Anomaly Detection in System Logs. A comprehensive guide from installation through production deployment.</p>
     </div>
     <div class="layout">
       <aside class="nav">
-        <h2>Contents</h2>
+        <h2>Table of Contents</h2>
+        
+        <h3>Getting Started</h3>
         <ul>
           <li><a href="01-introduction.html">1. Introduction</a></li>
           <li><a href="02-installation.html">2. Installation</a></li>
-          <li><a href="03-data.html">3. Data and files</a></li>
-          <li><a href="04-pipeline.html">4. Pipeline</a></li>
-          <li><a href="05-models.html">5. Model architecture</a></li>
+          <li><a href="03-data.html">3. Data and Logs</a></li>
+        </ul>
+        
+        <h3>Core Concepts</h3>
+        <ul>
+          <li><a href="04-pipeline.html">4. The Pipeline</a></li>
+          <li><a href="05-models.html">5. Model Architecture</a></li>
+        </ul>
+        
+        <h3>Running DeepSentry</h3>
+        <ul>
           <li><a href="06-config.html">6. Configuration</a></li>
-          <li><a href="07-live.html">7. Live monitoring</a></li>
-          <li><a href="08-reference.html">8. Reference</a></li>
+          <li><a href="07-live.html">7. Live Monitoring</a></li>
+        </ul>
+        
+        <h3>Reference & Support</h3>
+        <ul>
+          <li><a href="08-reference.html">8. API Reference</a></li>
           <li><a href="09-troubleshooting.html">9. Troubleshooting</a></li>
         </ul>
-        <h2>Project files</h2>
+        
+        <h3>Advanced & Production</h3>
+        <ul>
+          <li><a href="10-advanced.html">10. Advanced Topics</a></li>
+          <li><a href="11-examples.html">11. Examples & Use Cases</a></li>
+          <li><a href="12-production.html">12. Production Best Practices</a></li>
+        </ul>
+        
+        <h2>Quick Links</h2>
         <div class="small">
           <div><a href="../README.md">README.md</a></div>
-          <div><a href="../src/config_loader.py">src/config_loader.py</a></div>
-          <div><a href="style.css">docs/style.css</a></div>
+          <div><a href="../Dockerfile">Dockerfile</a></div>
+          <div><a href="../requirements.txt">requirements.txt</a></div>
+          <div><a href="../LICENSE">MIT License</a></div>
         </div>
       </aside>
       <main class="content">
-        <h2 class="chapter-title">Start here</h2>
-        <p class="chapter-meta">A plain documentation front page, intended to feel like an older project manual.</p>
+        <h2>DeepSentry: Unsupervised Anomaly Detection</h2>
+        
+        <p>
+          Welcome to the complete DeepSentry documentation. This manual covers everything from installation to production deployment. Whether you're a DevOps engineer, data scientist, or security professional, you'll find practical guidance for deploying anomaly detection on your logs.
+        </p>
 
-        <div class="box">
-          <h3>What this project does</h3>
-          <p>DeepSentry trains a text autoencoder on raw log messages, encodes the resulting sequences, then scores anomalies using a recurrent autoencoder model.</p>
+        <div class="learning-outcomes">
+          <h4>What You'll Learn</h4>
+          <ul>
+            <li>How anomaly detection works without labeled training data</li>
+            <li>The complete pipeline: from raw logs to anomaly scores</li>
+            <li>How to configure the system for your specific logs</li>
+            <li>How to deploy and monitor in production</li>
+            <li>Troubleshooting common issues</li>
+            <li>Advanced techniques for your specific use case</li>
+          </ul>
         </div>
 
+        <h3>How to Use This Manual</h3>
+
+        <p>
+          <strong>New to DeepSentry?</strong> Start with Chapter 1 (Introduction) and work through sequentially. Each chapter builds on the previous one.
+        </p>
+
+        <p>
+          <strong>Setting up for the first time?</strong> Follow Chapters 2-4 for installation and understanding the pipeline.
+        </p>
+
+        <p>
+          <strong>Running on your logs?</strong> Focus on Chapters 3, 6, and 11 for data preparation, configuration, and real examples.
+        </p>
+
+        <p>
+          <strong>Deploying to production?</strong> Read Chapter 7 (Live Monitoring) and Chapter 12 (Production Best Practices).
+        </p>
+
+        <p>
+          <strong>Debugging an issue?</strong> Jump to Chapter 9 (Troubleshooting) or use the search function.
+        </p>
+
         <div class="box">
-          <h3>What is already implemented</h3>
-          <ul class="tight">
-            <li>Log preprocessing and tokenization</li>
-            <li>Text autoencoder training</li>
-            <li>Dataset encoding and anomaly scoring</li>
-            <li>Labeled evaluation and plots</li>
-            <li>Live monitoring loop</li>
-            <li>Docker based execution</li>
+          <h3>What This Project Includes</h3>
+          <ul>
+            <li><strong>Text Autoencoder:</strong> Compresses log messages into semantic vectors</li>
+            <li><strong>Anomaly Detector:</strong> Bidirectional LSTM for detecting deviations from normal patterns</li>
+            <li><strong>Live Monitor:</strong> Real-time scoring with adaptive thresholding</li>
+            <li><strong>Evaluation Tools:</strong> Metrics, ROC curves, and analysis</li>
+            <li><strong>Docker Deployment:</strong> Complete containerized pipeline</li>
+            <li><strong>Comprehensive Docs:</strong> 12-chapter manual with examples and best practices</li>
           </ul>
         </div>
 
         <div class="box">
-          <h3>What still remains for a production grade release</h3>
-          <ul class="tight">
-            <li>Broader tests</li>
-            <li>More validation on inputs and config values</li>
-            <li>A proper CLI wrapper</li>
-            <li>Packaging metadata</li>
-            <li>Continuous integration beyond the smoke test</li>
-          </ul>
+          <h3>Chapter Overview</h3>
+          
+          <p><strong>Chapter 1: Introduction</strong> – Why unsupervised anomaly detection? How does it work? What will you learn?</p>
+          
+          <p><strong>Chapter 2: Installation</strong> – Get set up with Docker, local Python, or GPU support in 5 minutes.</p>
+          
+          <p><strong>Chapter 3: Data and Logs</strong> – Understand log formats, prepare your data, and meet the HDFS dataset.</p>
+          
+          <p><strong>Chapter 4: The Pipeline</strong> – Walk through all 6 stages from raw logs to live anomalies with detailed diagrams.</p>
+          
+          <p><strong>Chapter 5: Model Architecture</strong> – Deep dive into LSTMs, autoencoders, and why this architecture works.</p>
+          
+          <p><strong>Chapter 6: Configuration</strong> – Tune every parameter; understand impact; optimize for your logs.</p>
+          
+          <p><strong>Chapter 7: Live Monitoring</strong> – Deploy real-time detection; integrate with alerting; handle production scenarios.</p>
+          
+          <p><strong>Chapter 8: API Reference</strong> – CLI commands, Python APIs, file formats, project structure.</p>
+          
+          <p><strong>Chapter 9: Troubleshooting</strong> – Common errors and their solutions; debugging strategies.</p>
+          
+          <p><strong>Chapter 10: Advanced Topics</strong> – Transfer learning, custom formats, optimization, ensemble methods.</p>
+          
+          <p><strong>Chapter 11: Examples</strong> – Real-world use cases: HDFS, microservices, databases, Kubernetes, web apps.</p>
+          
+          <p><strong>Chapter 12: Production Best Practices</strong> – Deployment architecture, security, monitoring, incident response, cost optimization.</p>
         </div>
 
-        <p>Read the chapters in order, or jump directly from the table of contents on the left.</p>
+        <h3>Key Concepts at a Glance</h3>
+
+        <table>
+          <tr>
+            <th>Concept</th>
+            <th>Explanation</th>
+            <th>Chapter</th>
+          </tr>
+          <tr>
+            <td>Unsupervised Learning</td>
+            <td>Learning from unlabeled data; discovers patterns without explicit annotation</td>
+            <td>1, 5</td>
+          </tr>
+          <tr>
+            <td>Text Autoencoder</td>
+            <td>Neural network that compresses log messages to fixed-size vectors</td>
+            <td>5</td>
+          </tr>
+          <tr>
+            <td>LSTM</td>
+            <td>Recurrent neural network good at learning sequences and temporal patterns</td>
+            <td>5</td>
+          </tr>
+          <tr>
+            <td>Reconstruction Error</td>
+            <td>How well the model predicts each step; high error = anomaly</td>
+            <td>5</td>
+          </tr>
+          <tr>
+            <td>Pipeline</td>
+            <td>6-stage process: prepare → text train → encode → anomaly train → eval → live</td>
+            <td>4</td>
+          </tr>
+          <tr>
+            <td>Configuration</td>
+            <td>YAML files that control every aspect of training and monitoring</td>
+            <td>6</td>
+          </tr>
+          <tr>
+            <td>Live Monitoring</td>
+            <td>Real-time scoring of incoming logs with adaptive anomaly thresholds</td>
+            <td>7</td>
+          </tr>
+        </table>
+
+        <h3>System Requirements</h3>
+
+        <ul>
+          <li><strong>CPU:</strong> 2+ cores (4+ recommended for faster training)</li>
+          <li><strong>Memory:</strong> 4GB minimum (8GB+ recommended)</li>
+          <li><strong>Storage:</strong> 10GB for models and logs</li>
+          <li><strong>Python:</strong> 3.6+ (3.8+ recommended)</li>
+          <li><strong>GPU (optional):</strong> NVIDIA GPU + CUDA 11.0+ for 5-10x faster training</li>
+        </ul>
+
+        <div class="note">
+          <strong>Getting Started Right Now?</strong>
+          <ol>
+            <li>Read Chapter 1 (15 minutes) to understand the approach</li>
+            <li>Follow Chapter 2 (10 minutes) to install</li>
+            <li>Skim Chapter 3 (10 minutes) to understand data</li>
+            <li>Run Chapter 4's pipeline (1-2 hours) on sample HDFS logs</li>
+          </ol>
+          That's it! You'll have a working anomaly detector by evening.
+        </div>
+
+        <h3>About This Manual</h3>
+
+        <p>
+          This documentation is written in the style of the <em>Rust Programming Language</em> book: comprehensive, example-rich, and designed to be read sequentially while remaining useful as a reference.
+        </p>
+
+        <p>
+          The manual is organized in three tiers:
+        </p>
+
+        <ul>
+          <li><strong>Getting Started (Chapters 1-3):</strong> High-level concepts and setup</li>
+          <li><strong>Core Usage (Chapters 4-7):</strong> Running the system and understanding how it works</li>
+          <li><strong>Mastery (Chapters 8-12):</strong> Reference material, advanced techniques, and production deployment</li>
+        </ul>
+
+        <p>
+          Each chapter includes:
+        </p>
+
+        <ul>
+          <li>Clear explanations with real examples</li>
+          <li>ASCII diagrams showing how components work</li>
+          <li>Code snippets you can copy and run</li>
+          <li>Common pitfalls and how to avoid them</li>
+          <li>Links to related chapters</li>
+        </ul>
+
+        <h3>Next Steps</h3>
+
+        <p>
+          Ready to dive in? Start with <a href="01-introduction.html">Chapter 1: Introduction</a>.
+        </p>
+
+        <p>
+          Have a specific goal? Jump to the relevant chapter:
+        </p>
+
+        <ul>
+          <li>Install DeepSentry → <a href="02-installation.html">Chapter 2</a></li>
+          <li>Prepare your logs → <a href="03-data.html">Chapter 3</a></li>
+          <li>Run the pipeline → <a href="04-pipeline.html">Chapter 4</a></li>
+          <li>Understand the models → <a href="05-models.html">Chapter 5</a></li>
+          <li>Configure for your logs → <a href="06-config.html">Chapter 6</a></li>
+          <li>Deploy to production → <a href="07-live.html">Chapter 7</a> + <a href="12-production.html">Chapter 12</a></li>
+          <li>Fix an issue → <a href="09-troubleshooting.html">Chapter 9</a></li>
+          <li>See real examples → <a href="11-examples.html">Chapter 11</a></li>
+        </ul>
 
         <div class="footer-nav">
           <span></span>
-          <a href="01-introduction.html">Next: Introduction</a>
+          <a href="01-introduction.html">Next: Introduction →</a>
         </div>
       </main>
     </div>

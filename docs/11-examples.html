@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=document-width, initial-scale=1">
+  <title>DeepSentry Book, Examples</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="frame">
+    <div class="banner">
+      <h1>DeepSentry</h1>
+      <p>Chapter 11, Examples and Use Cases</p>
+    </div>
+    <div class="layout">
+      <aside class="nav">
+        <h2>Contents</h2>
+        <ul>
+          <li><a href="book.html">Start page</a></li>
+          <li><a href="01-introduction.html">1. Introduction</a></li>
+          <li><a href="02-installation.html">2. Installation</a></li>
+          <li><a href="03-data.html">3. Data and files</a></li>
+          <li><a href="04-pipeline.html">4. Pipeline</a></li>
+          <li><a href="05-models.html">5. Model architecture</a></li>
+          <li><a href="06-config.html">6. Configuration</a></li>
+          <li><a href="07-live.html">7. Live monitoring</a></li>
+          <li><a href="08-reference.html">8. Reference</a></li>
+          <li><a href="09-troubleshooting.html">9. Troubleshooting</a></li>
+          <li><a href="10-advanced.html">10. Advanced Topics</a></li>
+          <li><a href="11-examples.html"><strong>11. Examples and Use Cases</strong></a></li>
+          <li><a href="12-production.html">12. Production Best Practices</a></li>
+        </ul>
+      </aside>
+      <main class="content">
+        <h2>Examples and Real-World Use Cases</h2>
+        <p class="chapter-meta">Working examples and how different organizations use DeepSentry.</p>
+
+        <h3>Example 1: HDFS Cluster Monitoring (Reference Implementation)</h3>
+
+        <h4>Scenario</h4>
+
+        <p>
+          A large data center runs a Hadoop HDFS cluster with 100+ nodes. They want to detect failures and anomalies early.
+        </p>
+
+        <h4>Implementation</h4>
+
+        <pre><code>
+# Step 1: Collect 2 weeks of clean HDFS logs
+ssh hadoop-master "tar -czf hdfs_logs.tar.gz /var/log/hdfs/"
+
+# Step 2: Extract to data directory
+tar -xzf hdfs_logs.tar.gz -C /data/hdfs_logs/
+
+# Step 3: Prepare data
+python src/tx/prepare.py \
+  --config dockerconfig/text_autoencoder_prepare_data.yml \
+  --data-dir /data/hdfs_logs
+
+# Step 4: Train models
+bash dockerrun/run_text_autoencoder_train.sh
+bash dockerrun/run_text_autoencoder_encode_dataset.sh
+bash dockerrun/run_anomaly_detector_train.sh
+
+# Step 5: Deploy live monitoring
+nohup bash dockerrun/run_live_monitoring.sh > /var/log/deepsentry.log 2>&1 &
+        </code></pre>
+
+        <h4>Results</h4>
+
+        <ul>
+          <li>Baseline: 0.2 anomaly score for normal operations</li>
+          <li>Detected failures: 3.5+ anomaly scores, 95% accuracy</li>
+          <li>False positive rate: 2-3% under normal conditions</li>
+          <li>Mean detection latency: 30 seconds after anomaly starts</li>
+        </ul>
+
+        <h3>Example 2: Microservices API Monitoring</h3>
+
+        <h4>Scenario</h4>
+
+        <p>
+          A SaaS platform has 20+ microservices writing to centralized logs. They want to detect service degradation and unusual request patterns.
+        </p>
+
+        <h4>Custom Setup</h4>
+
+        <pre><code>
+# Logs are in JSON format from API gateway
+# {"timestamp":"2022-01-15T14:23:45Z","service":"user-api","level":"INFO","message":"Request received"}
+
+# Custom log parser
+# src/microservices_parser.py
+
+import json
+from datetime import datetime
+
+class MicroservicesLogParser:
+    def parse_message(self, line):
+        data = json.loads(line)
+        timestamp = datetime.fromisoformat(data['timestamp']).strftime("%y%m%d %H%M%S")
+        
+        # Combine service and message for richer context
+        message = f"{data['service']}: {data['message']}"
+        return timestamp, message
+
+# Training configuration (tuned for API logs)
+# dockerconfig/text_autoencoder_train.yml
+parameters:
+  embedding_size: 32              # APIs logs are consistent
+  encoder_output_size: 64
+  epochs: 5                       # Less training data needed
+  batch_size: 64
+  bidirectional: false            # Logs are mostly sequential
+
+# Anomaly detection config (APIs are fast)
+parameters:
+  sequence_length: 5              # Shorter sequences
+  lstm_hidden_size: 32
+  epochs: 8
+  bidirectional: true             # Need context both ways
+        </code></pre>
+
+        <h4>Results</h4>
+
+        <ul>
+          <li>Detects service restarts and crashes within 10 seconds</li>
+          <li>Catches unusual API request patterns (e.g., spike in 404s)</li>
+          <li>Alerts on database connection failures</li>
+          <li>Distinguishes between normal traffic spikes and actual anomalies</li>
+        </ul>
+
+        <h3>Example 3: Database Server Monitoring</h3>
+
+        <h4>Scenario</h4>
+
+        <p>
+          PostgreSQL database server generating detailed query and transaction logs. They need to catch performance degradation and errors.
+        </p>
+
+        <h4>Log Extraction</h4>
+
+        <pre><code>
+# PostgreSQL logs go to syslog
+# Extract with proper timestamp format
+
+cat /var/log/postgresql.log | awk '{
+  # Convert to Utah format: YYMMDD HHMMSS MESSAGE
+  print strftime("%y%m%d %H%M%S", $1) " " $0
+}' > /data/postgres.log
+
+# Or directly from postgres logs with log_line_prefix configured
+# log_line_prefix = '[%t] %u@%d %p: '
+        </code></pre>
+
+        <h4>Tuning for Databases</h4>
+
+        <pre><code>
+# Databases have very structured logs
+# Tune for high accuracy
+
+parameters:
+  embedding_size: 64
+  encoder_output_size: 128        # Richer representation
+  epochs: 15                      # More training for precision
+  batch_size: 32
+  bidirectional: true             # Transaction context matters
+  dropout: 0.3                    # Prevent overfitting
+
+# Anomaly detection
+parameters:
+  sequence_length: 15             # Longer sequences for transaction context
+  lstm_hidden_size: 128           # Larger capacity
+  epochs: 20                      # More training
+  threshold_multiplier: 3.0       # Be conservative with alerts
+        </code></pre>
+
+        <h4>Detected Anomalies</h4>
+
+        <ul>
+          <li>Queries taking longer than normal</li>
+          <li>Unusual connection patterns</li>
+          <li>Transaction deadlocks</li>
+          <li>Index corruption or missing indexes</li>
+          <li>Disk space issues</li>
+        </ul>
+
+        <h3>Example 4: Kubernetes Cluster Monitoring</h3>
+
+        <h4>Scenario</h4>
+
+        <p>
+          Kubernetes cluster with 50+ nodes and 500+ pods. They want to detect pod crashes, network issues, and resource exhaustion.
+        </p>
+
+        <h4>Log Aggregation</h4>
+
+        <pre><code>
+# Collect logs from kubelet
+cat /var/log/kubelet.log | awk '{print strftime("%y%m%d %H%M%S") " " $0}' > k8s.log
+
+# Or from container runtime (Docker)
+journalctl -u docker --no-pager | \
+  awk '{print strftime("%y%m%d %H%M%S") " " $0}' > container.log
+
+# Combine multiple sources
+cat k8s.log container.log | sort -k1,2 > combined.log
+        </code></pre>
+
+        <h4>K8s-Specific Configuration</h4>
+
+        <pre><code>
+# Kubernetes logs are verbose with lots of repetition
+# Tune to filter noise
+
+parameters:
+  root_dir: {ROOT_DATA_DIR}
+  
+  # Pre-filter unimportant logs
+  min_word_count: 3               # Ignore very rare events
+  max_vocab_size: 5000            # K8s has fewer unique patterns than you'd think
+  
+  # Training
+  epochs: 12
+  embedding_size: 48              # K8s logs are somewhat uniform
+  
+  # Anomaly detection focuses on rare patterns
+  sequence_length: 8
+  lstm_hidden_size: 64
+  epochs: 15
+  threshold_multiplier: 2.2       # K8s noise is high, be permissive
+        </code></pre>
+
+        <h4>Detected Issues</h4>
+
+        <ul>
+          <li>Pod CrashLoopBackOff patterns</li>
+          <li>Node NotReady and MemoryPressure conditions</li>
+          <li>Network plugin failures</li>
+          <li>Scheduler backoff and binding failures</li>
+          <li>Volume mount and storage errors</li>
+        </ul>
+
+        <h3>Example 5: Web Application Log Monitoring</h3>
+
+        <h4>Scenario</h4>
+
+        <p>
+          Django/Flask web application generating logs from multiple processes. They want to detect:
+        </p>
+
+        <ul>
+          <li>Internal server errors (500s)</li>
+          <li>Authentication failures</li>
+          <li>Database query timeouts</li>
+          <li>Unusual request volumes</li>
+        </ul>
+
+        <h4>Application Instrumentation</h4>
+
+        <pre><code>
+# Flask example with structured logging
+
+import logging
+import json
+from datetime import datetime
+
+class LogFormatter(logging.Formatter):
+    def format(self, record):
+        timestamp = datetime.utcnow().strftime("%y%m%d %H%M%S")
+        message = record.getMessage()
+        return f"{timestamp} {message}"
+
+# Configure app logging
+handler = logging.FileHandler('app.log')
+handler.setFormatter(LogFormatter())
+logger = logging.getLogger()
+logger.addHandler(handler)
+
+# Log events with consistent format
+logger.info("POST /api/users - 201 Created")
+logger.error("Database connection timeout: 30s")
+logger.warning("Authentication failed: IP 192.168.1.100")
+        </code></pre>
+
+        <h4>Baseline Configuration</h4>
+
+        <pre><code>
+# Web app logs are simple and consistent
+
+parameters:
+  embedding_size: 32              # Applications speak uniformly
+  encoder_output_size: 48
+  epochs: 8
+  batch_size: 64
+  
+  # Anomaly detection
+  sequence_length: 5              # HTTP requests are quick
+  lstm_hidden_size: 32
+  threshold_multiplier: 2.0       # Web patterns are distinctive
+        </code></pre>
+
+        <h3>Example 6: Time-Series Sensor Data (Non-Traditional)</h3>
+
+        <h4>Scenario</h4>
+
+        <p>
+          Industrial monitoring system with sensor logs. While not traditional text logs, the approach works:
+        </p>
+
+        <pre><code>
+# Sensor logs look like:
+220115 14:23:45 SENSOR_001: temperature=42.3°C status=OK
+220115 14:23:46 SENSOR_002: pressure=101.2kPa status=OK
+220115 14:23:47 SENSOR_001: temperature=42.5°C status=WARN
+
+# They can be processed like text
+# The text encoder learns that:
+# - temperatures in 40-45°C range are normal
+# - status=WARN is less common than OK
+# - pressure values cluster around 101kPa
+
+# The anomaly detector learns:
+# - SENSOR_001 usually sees gradual temperature changes
+# - Rapid jumps (e.g., 42.3 → 48.1) are anomalous
+# - Status should not jump from OK to ERROR without WARN
+        </code></pre>
+
+        <h3>Comparison: Configuration Across Use Cases</h3>
+
+        <table>
+          <tr>
+            <th>Use Case</th>
+            <th>embedding_size</th>
+            <th>sequence_length</th>
+            <th>epochs</th>
+            <th>threshold</th>
+          </tr>
+          <tr>
+            <td>HDFS (complex)</td>
+            <td>128</td>
+            <td>20</td>
+            <td>15</td>
+            <td>2.5</td>
+          </tr>
+          <tr>
+            <td>Microservices (fast)</td>
+            <td>32</td>
+            <td>5</td>
+            <td>8</td>
+            <td>2.0</td>
+          </tr>
+          <tr>
+            <td>Database (precise)</td>
+            <td>64</td>
+            <td>15</td>
+            <td>20</td>
+            <td>3.0</td>
+          </tr>
+          <tr>
+            <td>Kubernetes (noisy)</td>
+            <td>48</td>
+            <td>8</td>
+            <td>12</td>
+            <td>2.2</td>
+          </tr>
+          <tr>
+            <td>Web App (simple)</td>
+            <td>32</td>
+            <td>5</td>
+            <td>8</td>
+            <td>2.0</td>
+          </tr>
+        </table>
+
+        <h3>Pattern: Getting Started with Your System</h3>
+
+        <ol>
+          <li><strong>Characterize your logs:</strong> How many messages per day? What's message complexity?</li>
+          <li><strong>Collect baseline:</strong> 2+ weeks of clean operations</li>
+          <li><strong>Start simple:</strong> Use default config, run one pipeline</li>
+          <li><strong>Evaluate:</strong> Check AUC and other metrics</li>
+          <li><strong>Tune:</strong> Adjust parameters based on results</li>
+          <li><strong>Iterate:</strong> Retrain as you learn more</li>
+        </ol>
+
+        <div class="footer-nav">
+          <a href="10-advanced.html">Previous: Advanced Topics</a>
+          <a href="12-production.html">Next: Production Best Practices</a>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DeepSentry Book, Production Best Practices</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="frame">
+    <div class="banner">
+      <h1>DeepSentry</h1>
+      <p>Chapter 12, Production Best Practices</p>
+    </div>
+    <div class="layout">
+      <aside class="nav">
+        <h2>Contents</h2>
+        <ul>
+          <li><a href="book.html">Start page</a></li>
+          <li><a href="01-introduction.html">1. Introduction</a></li>
+          <li><a href="02-installation.html">2. Installation</a></li>
+          <li><a href="03-data.html">3. Data and files</a></li>
+          <li><a href="04-pipeline.html">4. Pipeline</a></li>
+          <li><a href="05-models.html">5. Model architecture</a></li>
+          <li><a href="06-config.html">6. Configuration</a></li>
+          <li><a href="07-live.html">7. Live monitoring</a></li>
+          <li><a href="08-reference.html">8. Reference</a></li>
+          <li><a href="09-troubleshooting.html">9. Troubleshooting</a></li>
+          <li><a href="10-advanced.html">10. Advanced Topics</a></li>
+          <li><a href="11-examples.html">11. Examples and Use Cases</a></li>
+          <li><a href="12-production.html"><strong>12. Production Best Practices</strong></a></li>
+        </ul>
+      </aside>
+      <main class="content">
+        <h2>Production Best Practices</h2>
+        <p class="chapter-meta">Running DeepSentry reliably, securely, and maintainably in production environments.</p>
+
+        <h3>Deployment Architecture</h3>
+
+        <h4>Recommended Architecture</h4>
+
+        <div class="diagram">
+┌─────────────────────────────────────────────────┐
+│          LOG SOURCES                            │
+│  Servers, Applications, Devices                 │
+└────────────────┬────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────┐
+│       LOG AGGREGATION LAYER                     │
+│  Fluentd, Logstash, Filebeat                    │
+│  (Collect, parse, route)                        │
+└────────────────┬────────────────────────────────┘
+                 │
+        ┌────────┴────────┐
+        ▼                 ▼
+   ┌─────────┐      ┌──────────────┐
+   │ Storage │      │ DEEPSENTRY   │
+   │ HDFS/S3 │      │ Live Monitor │
+   │ Long    │      │ (Real-time)  │
+   │ term    │      └──────┬───────┘
+   └─────────┘             │
+                           ▼
+                    ┌─────────────────┐
+                    │  Alerting       │
+                    │  Slack, PagerD, │
+                    │  Email, etc     │
+                    └─────────────────┘
+        </div>
+
+        <h3>Security Considerations</h3>
+
+        <h4>Sensitive Information in Logs</h4>
+
+        <p>
+          Logs often contain sensitive data (API keys, passwords, PII). Before training:
+        </p>
+
+        <pre><code>
+# Sanitize logs before storage
+import re
+
+def sanitize_log(message):
+    # Remove API keys
+    message = re.sub(r'api_key=[^\s]+', 'api_key=REDACTED', message)
+    
+    # Remove passwords
+    message = re.sub(r'password=[^\s]+', 'password=REDACTED', message)
+    
+    # Remove email addresses (partial)
+    message = re.sub(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+', 'EMAIL_REDACTED', message)
+    
+    # Remove credit card numbers
+    message = re.sub(r'\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b', 'CC_REDACTED', message)
+    
+    return message
+
+# Apply before preparation
+with open("raw.log") as f_in, open("sanitized.log") as f_out:
+    for line in f_in:
+        timestamp, message = line.split(' ', 2)
+        message = sanitize_log(message)
+        f_out.write(f"{timestamp} {message}\n")
+        </code></pre>
+
+        <h4>Access Control</h4>
+
+        <pre><code>
+# Secure file permissions
+chmod 700 /data/deepsentry                   # Owner only
+chmod 600 /data/deepsentry/models/*.h5       # Restrict model access
+chmod 600 /data/deepsentry/logs/*.log        # Restrict logs
+
+# Secure environment variables (don't hardcode credentials)
+export DEEPSENTRY_ALERT_WEBHOOK_TOKEN="xxxxx"
+# Or use secrets management: HashiCorp Vault, AWS Secrets, etc.
+
+# Audit logging
+journalctl -u deepsentry-live | grep ALERT   # Review all alerts
+        </code></pre>
+
+        <h3>Reliability and High Availability</h3>
+
+        <h4>Redundant Deployment</h4>
+
+        <p>
+          Run multiple instances for fault tolerance:
+        </p>
+
+        <pre><code>
+# Kubernetes with multiple replicas
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deepsentry-live
+spec:
+  replicas: 3                    # Run 3 instances
+  strategy:
+    type: RollingUpdate          # Gradual updates
+    rollingUpdate:
+      maxUnavailable: 1          # Keep 2+ running during updates
+  template:
+    # ... pod spec ...
+        </code></pre>
+
+        <h4>Health Checks</h4>
+
+        <pre><code>
+# Docker health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD python -c "
+    import requests
+    response = requests.get('http://localhost:8080/health')
+    exit(0 if response.status_code == 200 else 1)
+  "
+
+# Kubernetes liveness probe
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 10
+  periodSeconds: 30
+
+# Readiness probe (ready to accept traffic)
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 10
+        </code></pre>
+
+        <h3>Monitoring DeepSentry Itself</h3>
+
+        <h4>Key Metrics to Track</h4>
+
+        <table>
+          <tr>
+            <th>Metric</th>
+            <th>What It Means</th>
+            <th>Alert If</th>
+          </tr>
+          <tr>
+            <td>Throughput (msgs/sec)</td>
+            <td>How fast logs are being processed</td>
+            <td>Drops 50% from baseline</td>
+          </tr>
+          <tr>
+            <td>Latency (ms per message)</td>
+            <td>How long scoring takes</td>
+            <td>Exceeds 100ms</td>
+          </tr>
+          <tr>
+            <td>Queue depth</td>
+            <td>Logs waiting to be processed</td>
+            <td>Continuously growing</td>
+          </tr>
+          <tr>
+            <td>Anomaly rate (%)</td>
+            <td>Percentage of logs flagged</td>
+            <td>Spikes >10% or drops to 0%</td>
+          </tr>
+          <tr>
+            <td>Model load time (ms)</td>
+            <td>Time to load models from disk</td>
+            <td>Exceeds 5 seconds</td>
+          </tr>
+          <tr>
+            <td>Memory usage (MB)</td>
+            <td>RAM consumed by process</td>
+            <td>Exceeds 80% available</td>
+          </tr>
+        </table>
+
+        <h4>Export Metrics</h4>
+
+        <pre><code>
+# Prometheus metrics in live monitor
+
+from prometheus_client import start_http_server, Counter, Histogram, Gauge
+
+# Define metrics
+messages_processed = Counter(
+    'deepsentry_messages_processed_total',
+    'Total messages processed'
+)
+
+anomalies_detected = Counter(
+    'deepsentry_anomalies_total',
+    'Total anomalies detected'
+)
+
+processing_time = Histogram(
+    'deepsentry_processing_seconds',
+    'Time to process each message'
+)
+
+anomaly_score_gauge = Gauge(
+    'deepsentry_last_anomaly_score',
+    'Most recent anomaly score'
+)
+
+# Start metrics server
+start_http_server(8000)
+
+# Use in main loop
+for log_entry in stream:
+    start = time.time()
+    
+    score = detector.score(log_entry)
+    anomaly_score_gauge.set(score)
+    
+    elapsed = time.time() - start
+    processing_time.observe(elapsed)
+    messages_processed.inc()
+    
+    if score > threshold:
+        anomalies_detected.inc()
+        </code></pre>
+
+        <h3>Model Management and Versioning</h3>
+
+        <h4>Versioning Strategy</h4>
+
+        <pre><code>
+# Save models with version and metadata
+models/
+├── text_encoder_v1.0.h5
+├── text_encoder_v1.0_metadata.json
+├── anomaly_detector_v1.0.h5
+├── anomaly_detector_v1.0_metadata.json
+├── text_encoder_v1.1.h5
+├── text_encoder_v1.1_metadata.json
+└── ...
+
+# Metadata includes
+{
+  "version": "1.0",
+  "training_date": "2022-01-15",
+  "training_data_days": 14,
+  "training_samples": 1000000,
+  "model_hash": "sha256:abc123",
+  "architecture": {
+    "embedding_size": 128,
+    "encoder_output_size": 128,
+    "lstm_hidden_size": 64
+  },
+  "validation_auc": 0.92,
+  "notes": "Trained on HDFS logs from Jan 1-14"
+}
+        </code></pre>
+
+        <h4>A/B Testing New Models</h4>
+
+        <pre><code>
+# Run new model in parallel, shadow mode (don't alert)
+class ABTester:
+    def __init__(self, model_current, model_candidate):
+        self.current = model_current
+        self.candidate = model_candidate
+        self.results = {
+            'current': [],
+            'candidate': []
+        }
+    
+    def score(self, sequence):
+        # Score with both models
+        current_score = self.current.score(sequence)
+        candidate_score = self.candidate.score(sequence)
+        
+        # Log results for analysis
+        self.results['current'].append(current_score)
+        self.results['candidate'].append(candidate_score)
+        
+        # Return current model's score (for alerts)
+        # Collect candidate metrics for analysis
+        return current_score, candidate_score
+    
+    def compare_metrics(self):
+        """Compare performance after collecting data"""
+        import numpy as np
+        return {
+            'mean_diff': np.mean(self.results['candidate']) - np.mean(self.results['current']),
+            'std_current': np.std(self.results['current']),
+            'std_candidate': np.std(self.results['candidate']),
+            'correlation': np.corrcoef(self.results['current'], self.results['candidate'])[0, 1]
+        }
+        </code></pre>
+
+        <h3>Retraining Strategy</h3>
+
+        <h4>When to Retrain</h4>
+
+        <p>
+          Retrain models when:
+        </p>
+
+        <ul>
+          <li><strong>Performance degrades:</strong> AUC drops >10% on recent data</li>
+          <li><strong>Data distribution changes:</strong> Mean/std of features shift significantly</li>
+          <li><strong>Anomaly rate spikes:</strong> Normal baselines have changed</li>
+          <li><strong>System changes:</strong> New hardware, software updates, configuration changes</li>
+          <li><strong>Regular schedule:</strong> E.g., monthly retraining with recent data</li>
+        </ul>
+
+        <h4>Retraining Pipeline</h4>
+
+        <pre><code>
+#!/bin/bash
+# Monthly retraining job
+
+set -e  # Exit on error
+
+DATA_DIR="/data/deepsentry"
+ARCHIVE_DIR="/archive/models"
+DATE=$(date +%Y%m%d)
+
+echo "Starting retraining at $(date)"
+
+# Collect recent data
+echo "Collecting training data..."
+find /var/log -name "*.log" -mtime -30 | \
+  xargs cat | \
+  sort > $DATA_DIR/recent_logs.log
+
+# Validate data
+echo "Validating logs..."
+line_count=$(wc -l < $DATA_DIR/recent_logs.log)
+if [ $line_count -lt 100000 ]; then
+    echo "ERROR: Not enough logs ($line_count < 100000)"
+    exit 1
+fi
+
+# Run full pipeline
+echo "Preparing data..."
+python src/tx/prepare.py --data-dir $DATA_DIR
+
+echo "Training text encoder..."
+python src/tx/train.py --data-dir $DATA_DIR
+
+echo "Encoding dataset..."
+python src/tx/encode.py --data-dir $DATA_DIR
+
+echo "Training anomaly detector..."
+python src/an/train.py --data-dir $DATA_DIR
+
+# Evaluate on holdout test set
+echo "Evaluating..."
+python src/an/analysis.py --data-dir $DATA_DIR
+
+# Check performance
+AUC=$(grep "AUC:" eval_results/metrics.json | cut -d: -f2)
+if (( $(echo "$AUC < 0.85" | bc -l) )); then
+    echo "ERROR: AUC too low ($AUC < 0.85)"
+    exit 1
+fi
+
+# Backup old models
+echo "Backing up old models..."
+mkdir -p $ARCHIVE_DIR/$DATE
+cp -r $DATA_DIR/*_model $ARCHIVE_DIR/$DATE/
+
+# Deploy new models
+echo "Deploying new models..."
+systemctl restart deepsentry-live
+
+echo "Retraining complete at $(date)"
+        </code></pre>
+
+        <h3>Incident Response</h3>
+
+        <h4>When DeepSentry Detects Anomalies</h4>
+
+        <ol>
+          <li><strong>Alert:</strong> Send notification to on-call team</li>
+          <li><strong>Investigate:</strong> Look at logs around the anomaly</li>
+          <li><strong>Understand:</strong> What system state caused it?</li>
+          <li><strong>Respond:</strong> Take action or declare false positive</li>
+          <li><strong>Document:</strong> Add to runbook for future reference</li>
+        </ol>
+
+        <h4>Runbook Template</h4>
+
+        <pre><code>
+# Runbook: DeepSentry Anomaly Alert
+
+## Alert: High Anomaly Score in HDFS Cluster
+
+### Impact
+- HDFS operations may be degraded
+- Data replication might be slow
+- File I/O operations could timeout
+
+### Immediate Steps (first 5 minutes)
+1. Check cluster health dashboard
+2. Run: `hdfs fsck /`
+3. Check DataNode logs for ERROR messages
+4. Verify disk space: `df -h`
+
+### Diagnosis (next 15 minutes)
+1. Look at logs 5 minutes before anomaly timestamp
+2. Search for: ERROR, Exception, FAILED, timeout
+3. Cross-reference with system metrics (CPU, memory, network)
+
+### Mitigation
+- If disk full: clear temporary files
+- If nodes offline: restart services
+- If network issue: check connectivity
+- If unknown: escalate to platform team
+
+### Prevention
+- Add trend monitoring for disk usage
+- Set up node health checks
+- Configure graceful degradation
+        </code></pre>
+
+        <h3>Cost Optimization</h3>
+
+        <h4>Compute Optimization</h4>
+
+        <ul>
+          <li><strong>CPU:</strong> Use smaller models or batch processing for non-real-time analysis</li>
+          <li><strong>GPU:</strong> Use GPU only during training, CPU for inference</li>
+          <li><strong>Memory:</strong> Stream data instead of loading all at once</li>
+          <li><strong>Storage:</strong> Archive old logs and models, keep recent ones online</li>
+        </ul>
+
+        <h4>Cloud Cost Optimization</h4>
+
+        <pre><code>
+# AWS cost optimization example
+
+# Train on EC2 Spot instances (70% cheaper)
+aws ec2 run-instances \
+  --image-id ami-xxxxx \
+  --instance-type p3.2xlarge \
+  --instance-market-options '{"MarketType":"spot"}'
+
+# Store models in S3 (cheap long-term storage)
+aws s3 cp text_encoder.h5 s3://deepsentry-models/2022-01/
+
+# Use CloudWatch for monitoring (built-in, cheap)
+# Use Lambda for infrequent retraining (pay per execution)
+
+# Estimate monthly cost
+# Inference: 0.1 CPU core + 2GB RAM = ~$20/month
+# Training (1x/month): 1 GPU + 8 CPU = ~$200/month
+# Storage: 1GB models + 100GB logs = ~$5/month
+# Total: ~$225/month for typical deployment
+        </code></pre>
+
+        <h3>Checklist: Production Readiness</h3>
+
+        <div class="note">
+          <strong>Before Going to Production:</strong>
+          <ul>
+            <li>☐ Security: Logs sanitized, access controlled</li>
+            <li>☐ Monitoring: Metrics exported, dashboards created</li>
+            <li>☐ Reliability: Redundant deployment, health checks</li>
+            <li>☐ Performance: Latency acceptable, throughput sufficient</li>
+            <li>☐ Testing: Evaluated on representative data, AUC >0.85</li>
+            <li>☐ Alerting: Integrations tested, on-call aware</li>
+            <li>☐ Runbooks: Incident response procedures documented</li>
+            <li>☐ Backups: Models and configs versioned and backed up</li>
+            <li>☐ Documentation: Team trained, procedures recorded</li>
+            <li>☐ Legal: Data privacy and compliance reviewed</li>
+          </ul>
+        </div>
+
+        <h3>Continuous Improvement</h3>
+
+        <p>
+          After deployment, continuously improve:
+        </p>
+
+        <ul>
+          <li><strong>Analyze false positives:</strong> Why did the model flag this? Can we improve?</li>
+          <li><strong>Track metrics:</strong> Detection rate, false positive rate, latency</li>
+          <li><strong>Retrain regularly:</strong> Monthly or quarterly with latest data</li>
+          <li><strong>Gather feedback:</strong> What did operators think of alerts?</li>
+          <li><strong>Update baselines:</strong> As systems evolve, retrain</li>
+          <li><strong>Expand scope:</strong> Start with one system, add others</li>
+        </ul>
+
+        <div class="footer-nav">
+          <a href="11-examples.html">Previous: Examples and Use Cases</a>
+          <span></span>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
