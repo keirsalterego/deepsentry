@@ -29,20 +29,544 @@
         </ul>
       </aside>
       <main class="content">
-        <h2 class="chapter-title">Troubleshooting</h2>
-        <p class="chapter-meta">The most common issues are missing data paths, missing dependencies, or a mismatch between the expected and actual YAML file names.</p>
+        <h2>Troubleshooting: Debugging and Problem Solving</h2>
+        <p class="chapter-meta">Common errors, how to diagnose them, and step-by-step solutions.</p>
 
-        <div class="box">
-          <h3>Checklist</h3>
-          <ul class="tight">
-            <li>Confirm the data root contains <code>dockerconfig</code></li>
-            <li>Confirm the renamed config files still exist</li>
-            <li>Confirm the Docker paths match the new short folder names</li>
-            <li>Confirm <code>pytest</code> is installed in the local venv when running tests</li>
-          </ul>
-        </div>
+        <h3>General Debugging Checklist</h3>
 
-        <p>If the project fails during encoding, inspect the input dataset for empty or malformed log lines. If live monitoring stalls, verify the configured data file still has readable log entries and the time interval is appropriate.</p>
+        <p>
+          When something fails, work through this checklist first:
+        </p>
+
+        <ol>
+          <li>Check the error message carefully (often tells you exactly what's wrong)</li>
+          <li>Verify files exist: <code>ls -la /path/to/file</code></li>
+          <li>Check disk space: <code>df -h</code></li>
+          <li>Check memory: <code>free -h</code></li>
+          <li>Enable verbose mode: Add <code>--verbose</code> to commands</li>
+          <li>Check logs in output directory</li>
+          <li>Try with a smaller dataset first</li>
+          <li>Check configuration file syntax (valid YAML)</li>
+        </ol>
+
+        <h3>Installation Issues</h3>
+
+        <h4>Error: ModuleNotFoundError: No module named 'tensorflow'</h4>
+
+        <p>
+          <strong>Cause:</strong> TensorFlow not installed or wrong Python environment.
+        </p>
+
+        <p>
+          <strong>Solution:</strong>
+        </p>
+
+        <pre><code>
+# Check which Python is active
+which python
+python --version
+
+# If using venv, ensure it's activated
+source venv/bin/activate
+echo $VIRTUAL_ENV  # Should show venv path
+
+# Reinstall requirements
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# Verify TensorFlow
+python -c "import tensorflow; print(tensorflow.__version__)"
+        </code></pre>
+
+        <h4>Error: ImportError: libcuda.so.11.0: cannot open shared object file</h4>
+
+        <p>
+          <strong>Cause:</strong> CUDA not installed or incompatible version.
+        </p>
+
+        <p>
+          <strong>Solution:</strong>
+        </p>
+
+        <pre><code>
+# Check if GPU is available
+nvidia-smi  # Should show GPU info
+
+# If GPU not found, use CPU-only TensorFlow
+pip uninstall tensorflow -y
+pip install tensorflow-cpu
+
+# Or install GPU version with correct CUDA
+pip install tensorflow[and-cuda]
+        </code></pre>
+
+        <h4>Error: Docker: permission denied while trying to connect to the Docker daemon</h4>
+
+        <p>
+          <strong>Cause:</strong> Docker daemon not running or user not in docker group.
+        </p>
+
+        <p>
+          <strong>Solution:</strong>
+        </p>
+
+        <pre><code>
+# Start Docker daemon
+sudo systemctl start docker
+
+# Add user to docker group
+sudo usermod -aG docker $USER
+newgrp docker
+
+# Verify
+docker ps
+        </code></pre>
+
+        <h3>Data Preparation Errors</h3>
+
+        <h4>Error: FileNotFoundError: [Errno 2] No such file or directory: 'HDFS_1.log'</h4>
+
+        <p>
+          <strong>Cause:</strong> Log file not in the configured location.
+        </p>
+
+        <p>
+          <strong>Solution:</strong>
+        </p>
+
+        <pre><code>
+# Check if file exists
+ls -la /path/to/HDFS_1.log
+
+# Check config file for correct path
+grep "raw_log_file:" dockerconfig/text_autoencoder_prepare_data.yml
+
+# Verify {ROOT_DATA_DIR} is being replaced correctly
+python -c "from src.config_loader import Config; \
+  c = Config.load_from_file('dockerconfig/text_autoencoder_prepare_data.yml', \
+  root_data_dir='/path/to/data'); \
+  print(c.get('raw_log_file'))"
+        </code></pre>
+
+        <h4>Error: ValueError: Expected 1D array, got 2D array instead</h4>
+
+        <p>
+          <strong>Cause:</strong> Log file format issue, missing messages, or malformed timestamps.
+        </p>
+
+        <p>
+          <strong>Solution:</strong>
+        </p>
+
+        <pre><code>
+# Check log file format (should be: YYMMDD HHMMSS MESSAGE)
+head -5 /path/to/HDFS_1.log
+
+# Count lines
+wc -l /path/to/HDFS_1.log
+
+# Check for empty lines
+grep -c "^$" /path/to/HDFS_1.log
+
+# Remove empty lines if any
+sed -i '/^$/d' /path/to/HDFS_1.log
+
+# Validate format with Python
+python -c "
+with open('HDFS_1.log') as f:
+    for i, line in enumerate(f):
+        if not line.strip():
+            print(f'Empty line at {i}')
+        parts = line.split(' ', 2)
+        if len(parts) < 3:
+            print(f'Bad format at line {i}: {line[:50]}')
+        if i > 100: break
+"
+        </code></pre>
+
+        <h4>Error: MemoryError during data preparation</h4>
+
+        <p>
+          <strong>Cause:</strong> Dataset too large to fit in memory.
+        </p>
+
+        <p>
+          <strong>Solution:</strong>
+        </p>
+
+        <pre><code>
+# Use a smaller dataset for testing
+head -100000 /path/to/HDFS_1.log > /tmp/small.log
+
+# Or increase system swap
+sudo fallocate -l 4G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+
+# Check available memory
+free -h
+        </code></pre>
+
+        <h3>Training Issues</h3>
+
+        <h4>Error: RuntimeError: CUDA out of memory</h4>
+
+        <p>
+          <strong>Cause:</strong> GPU memory insufficient for batch size.
+        </p>
+
+        <p>
+          <strong>Solution:</strong>
+        </p>
+
+        <pre><code>
+# Reduce batch size in config
+# Change batch_size from 32 to 16 or 8
+
+# Or use CPU instead
+DEEPSENTRY_GPU=0 python src/tx/train.py ...
+
+# Or reduce model size
+# Change embedding_size from 128 to 64
+# Change lstm_hidden_size from 128 to 64
+        </code></pre>
+
+        <h4>Error: NaN loss during training</h4>
+
+        <p>
+          <strong>Cause:</strong> Learning rate too high, bad data, or numerical instability.
+        </p>
+
+        <p>
+          <strong>Solution:</strong>
+        </p>
+
+        <pre><code>
+# Reduce learning rate in config
+# Change learning_rate from 0.001 to 0.0001
+
+# Check for NaN or Inf in data
+python -c "
+import numpy as np
+import pickle
+with open('prepared_data/train.txt') as f:
+    for line in f:
+        if 'nan' in line.lower() or 'inf' in line.lower():
+            print(f'Found: {line}')
+"
+
+# Check data statistics
+python -c "
+import numpy as np
+data = np.random.randn(1000)
+print(f'Mean: {np.mean(data)}, Std: {np.std(data)}, Min: {np.min(data)}, Max: {np.max(data)}')
+"
+        </code></pre>
+
+        <h4>Error: Model validation loss not improving</h4>
+
+        <p>
+          <strong>Cause:</strong> Model is not learning. Could be learning rate, model size, or data quality.
+        </p>
+
+        <p>
+          <strong>Solution:</strong>
+        </p>
+
+        <pre><code>
+# Try different learning rates
+# 0.0001 (very small) → 0.001 → 0.01 (very large)
+
+# Increase model capacity
+# embedding_size: 64 → 128 → 256
+# encoder_hidden_size: 128 → 256
+
+# Check if data is too small
+# Need at least 1000s of samples for good training
+
+# Plot training curves to diagnose
+python -c "
+import json
+with open('text_autoencoder_model/training_log.txt') as f:
+    for line in f:
+        print(line)
+"
+        </code></pre>
+
+        <h3>Encoding Issues</h3>
+
+        <h4>Error: Index out of range in encoder</h4>
+
+        <p>
+          <strong>Cause:</strong> New words in test data that weren't in training vocabulary.
+        </p>
+
+        <p>
+          <strong>Solution:</strong>
+        </p>
+
+        <pre><code>
+# Ensure test data uses same log format and source
+
+# Or update vocab with unknown word handling
+# (This requires code changes; consider retraining on combined data)
+
+# Check vocabulary size
+python -c "
+import pickle
+with open('prepared_data/vocab.pkl', 'rb') as f:
+    vocab = pickle.load(f)
+    print(f'Vocabulary size: {len(vocab)}')
+    print(f'Sample words: {list(vocab.items())[:10]}')
+"
+        </code></pre>
+
+        <h3>Anomaly Detection Issues</h3>
+
+        <h4>Error: Sequence length mismatch</h4>
+
+        <p>
+          <strong>Cause:</strong> Training used different sequence_length than evaluation.
+        </p>
+
+        <p>
+          <strong>Solution:</strong>
+        </p>
+
+        <pre><code>
+# Check training config
+grep "sequence_length:" dockerconfig/anomaly_detector_train.yml
+
+# Check evaluation config
+grep "sequence_length:" dockerconfig/anomaly_detector_eval.yml
+
+# Must match. If not, retrain with correct length
+        </code></pre>
+
+        <h4>Error: No anomalies detected (all scores below threshold)</h4>
+
+        <p>
+          <strong>Cause:</strong> Model thinks everything is normal, or threshold is too high.
+        </p>
+
+        <p>
+          <strong>Debugging:</strong>
+        </p>
+
+        <pre><code>
+# Check anomaly score distribution
+python -c "
+import pickle
+import numpy as np
+with open('eval_results/anomaly_scores.pkl', 'rb') as f:
+    scores = pickle.load(f)
+    print(f'Min: {np.min(scores)}')
+    print(f'Max: {np.max(scores)}')
+    print(f'Mean: {np.mean(scores)}')
+    print(f'Std: {np.std(scores)}')
+    print(f'Median: {np.median(scores)}')
+"
+
+# Try lower threshold
+# threshold: 2.5 → 1.5 or 1.0
+        </code></pre>
+
+        <h4>Error: Too many false positives (alerts for normal logs)</h4>
+
+        <p>
+          <strong>Cause:</strong> Threshold too low, model overfitting, or training data contaminated.
+        </p>
+
+        <p>
+          <strong>Solution:</strong>
+        </p>
+
+        <pre><code>
+# Increase threshold
+# threshold: 1.0 → 2.5 or 3.0
+
+# Check training data for anomalies
+python -c "
+# Manually inspect training logs
+with open('prepared_data/train.txt') as f:
+    for i, line in enumerate(f):
+        if 'error' in line.lower() or 'fail' in line.lower():
+            print(f'Line {i}: {line[:100]}')
+        if i > 1000: break
+"
+
+# Retrain with cleaner data if needed
+        </code></pre>
+
+        <h3>Live Monitoring Issues</h3>
+
+        <h4>Error: Process hangs, stops reading logs</h4>
+
+        <p>
+          <strong>Cause:</strong> File I/O stalled, network issue, or infinite loop.
+        </p>
+
+        <p>
+          <strong>Solution:</strong>
+        </p>
+
+        <pre><code>
+# Kill and restart
+pkill -f "python src/live/main.py"
+
+# Run with timeout (Linux)
+timeout 3600 bash dockerrun/run_live_monitoring.sh
+
+# Check if log file is being updated
+tail -f /var/log/app.log | head -20
+
+# Check for permission issues
+ls -la /var/log/app.log
+        </code></pre>
+
+        <h4>Error: No alerts being produced</h4>
+
+        <p>
+          <strong>Cause:</strong> Models not loaded, wrong config, or all scores below threshold.
+        </p>
+
+        <p>
+          <strong>Solution:</strong>
+        </p>
+
+        <pre><code>
+# Check with verbose mode
+python src/live/main.py \
+  --config dockerconfig/live_monitoring_config.yml \
+  --verbose
+
+# Verify model paths exist
+ls -la text_autoencoder_model/encoder.h5
+ls -la anomaly_trained_model/detector.h5
+
+# Check if logs are being read
+head -1 /var/log/app.log
+
+# Test model manually
+python -c "
+from src.an.eval import BidirectionalLSTMAnomalyDetectorHandle
+import numpy as np
+detector = BidirectionalLSTMAnomalyDetectorHandle(
+    'anomaly_trained_model/detector.h5'
+)
+seq = np.random.randn(10, 128)
+score = detector.get_anomaly_score(seq)
+print(f'Test score: {score}')
+"
+        </code></pre>
+
+        <h3>Performance Issues</h3>
+
+        <h4>Problem: Training is very slow</h4>
+
+        <p>
+          <strong>Diagnosis:</strong>
+        </p>
+
+        <ul>
+          <li>Are you using GPU? Run <code>nvidia-smi</code> during training</li>
+          <li>What's the batch size? Larger batches = faster</li>
+          <li>How large is your dataset? Very large = slow</li>
+          <li>What's your model size? Larger models = slower</li>
+        </ul>
+
+        <p>
+          <strong>Solutions:</strong>
+        </p>
+
+        <ul>
+          <li>Use GPU acceleration (Chapter 2)</li>
+          <li>Increase batch_size in config</li>
+          <li>Start with smaller dataset (first 100K lines)</li>
+          <li>Reduce model sizes (embedding_size, hidden_size)</li>
+          <li>Reduce epochs</li>
+        </ul>
+
+        <h4>Problem: High memory usage</h4>
+
+        <p>
+          <strong>Check:</strong>
+        </p>
+
+        <pre><code>
+# Monitor during training
+watch -n 1 'ps aux | grep python'
+watch -n 1 'free -h'
+
+# Profile with Python
+import tracemalloc
+tracemalloc.start()
+# ... run code ...
+current, peak = tracemalloc.get_traced_memory()
+print(f'Current: {current / 1024 / 1024:.1f}MB, Peak: {peak / 1024 / 1024:.1f}MB')
+        </code></pre>
+
+        <p>
+          <strong>Solutions:</strong>
+        </p>
+
+        <ul>
+          <li>Reduce batch size</li>
+          <li>Reduce model size</li>
+          <li>Use streaming/generator approach</li>
+          <li>Process data in smaller chunks</li>
+        </ul>
+
+        <h3>Production Debugging</h3>
+
+        <h4>Docker Debugging</h4>
+
+        <pre><code>
+# Check container logs
+docker logs deepsentry-live
+
+# Attach to running container
+docker exec -it deepsentry-live bash
+
+# Run with verbose
+docker run -it deepsentry:latest \
+  python src/live/main.py --verbose
+
+# Check resource usage
+docker stats deepsentry-live
+        </code></pre>
+
+        <h4>Kubernetes Debugging</h4>
+
+        <pre><code>
+# Check pod status
+kubectl describe pod deepsentry-live-xxx
+
+# Get logs
+kubectl logs deepsentry-live-xxx
+
+# Exec into pod
+kubectl exec -it deepsentry-live-xxx -- bash
+
+# Watch status
+kubectl logs -f deepsentry-live-xxx
+        </code></pre>
+
+        <h3>Getting Help</h3>
+
+        <p>
+          When you're stuck:
+        </p>
+
+        <ol>
+          <li><strong>Check logs:</strong> Most errors are logged with helpful messages</li>
+          <li><strong>Enable verbose mode:</strong> Adds detailed debugging info</li>
+          <li><strong>Read the error message carefully:</strong> It usually tells you exactly what's wrong</li>
+          <li><strong>Search for similar issues:</strong> Check GitHub issues</li>
+          <li><strong>Isolate the problem:</strong> Try smaller dataset, simpler model, remove customizations</li>
+          <li><strong>Report with details:</strong> If reporting a bug, include logs, config, data samples</li>
+        </ol>
 
         <div class="footer-nav">
           <a href="08-reference.html">Previous: Reference</a>

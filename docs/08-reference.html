@@ -29,25 +29,433 @@
         </ul>
       </aside>
       <main class="content">
-        <h2 class="chapter-title">Reference</h2>
-        <p class="chapter-meta">A quick lookup chapter for commands and important files.</p>
+        <h2>Reference: Commands, APIs, and Module Documentation</h2>
+        <p class="chapter-meta">Quick lookup: command-line interfaces, Python APIs, file formats, and module references.</p>
+
+        <h3>Command-Line Interface (CLI)</h3>
+
+        <h4>Data Preparation</h4>
+
+        <pre><code>python src/tx/prepare.py --config dockerconfig/text_autoencoder_prepare_data.yml
+
+Arguments:
+  --config       YAML configuration file
+  --data-dir     Override {ROOT_DATA_DIR} in config
+  --verbose      Print detailed logs
+        </code></pre>
+
+        <p>
+          Output files:
+        </p>
+
+        <pre><code>prepared_data/
+├── train.txt      # Training messages
+├── val.txt        # Validation messages
+└── vocab.pkl      # Word ID mapping
+        </code></pre>
+
+        <h4>Text Autoencoder Training</h4>
+
+        <pre><code>python src/tx/train.py --config dockerconfig/text_autoencoder_train.yml
+
+Arguments:
+  --config       YAML configuration file
+  --data-dir     Override {ROOT_DATA_DIR}
+  --epochs       Override epochs in config
+  --batch-size   Override batch size
+  --gpu          Force GPU usage
+  --verbose      Debug output
+        </code></pre>
+
+        <p>
+          Output files:
+        </p>
+
+        <pre><code>text_autoencoder_model/
+├── encoder.h5      # Trained encoder (for encoding)
+├── decoder.h5      # Decoder (for inspection)
+├── training_log.txt
+└── metadata.json   # Parameters used
+        </code></pre>
+
+        <h4>Dataset Encoding</h4>
+
+        <pre><code>python src/tx/encode.py --config dockerconfig/text_autoencoder_dataset_encoder.yml
+
+Arguments:
+  --config       YAML configuration file
+  --data-dir     Override {ROOT_DATA_DIR}
+  --batch-size   Encoding batch size
+  --verbose      Debug output
+        </code></pre>
+
+        <p>
+          Output files:
+        </p>
+
+        <pre><code>encoded_dataset/
+├── train_encoded.pkl   # Training vectors (numpy array)
+├── val_encoded.pkl     # Validation vectors
+└── test_encoded.pkl    # Test vectors
+        </code></pre>
+
+        <h4>Anomaly Detector Training</h4>
+
+        <pre><code>python src/an/train.py --config dockerconfig/anomaly_detector_train.yml
+
+Arguments:
+  --config       YAML configuration file
+  --data-dir     Override {ROOT_DATA_DIR}
+  --epochs       Override epochs
+  --batch-size   Override batch size
+  --gpu          Use GPU
+  --verbose      Debug output
+        </code></pre>
+
+        <p>
+          Output files:
+        </p>
+
+        <pre><code>anomaly_trained_model/
+├── detector.h5      # Trained LSTM anomaly detector
+├── training_log.txt
+└── metadata.json
+        </code></pre>
+
+        <h4>Anomaly Evaluation</h4>
+
+        <pre><code>python src/an/eval.py --config dockerconfig/anomaly_detector_eval.yml
+
+# Or with ground truth labels:
+python src/an/analysis.py --config dockerconfig/anomaly_detector_eval_labeled.yml
+
+Arguments:
+  --config       YAML configuration file
+  --data-dir     Override {ROOT_DATA_DIR}
+  --threshold    Anomaly score threshold
+  --output-dir   Save results here
+  --verbose      Debug output
+        </code></pre>
+
+        <p>
+          Output files (unlabeled):
+        </p>
+
+        <pre><code>eval_results/
+├── anomaly_scores.pkl      # All scores for test data
+├── threshold.json          # Recommended threshold
+└── statistics.json         # Mean, std, min, max scores
+        </code></pre>
+
+        <p>
+          Output files (labeled):
+        </p>
+
+        <pre><code>eval_results/
+├── anomaly_scores.pkl
+├── roc_curve.png           # ROC curve plot
+├── precision_recall.png    # Precision-recall curve
+├── metrics.json            # AUC, accuracy, F1, etc.
+└── confusion_matrix.png
+        </code></pre>
+
+        <h4>Live Monitoring</h4>
+
+        <pre><code>python src/live/main.py --config dockerconfig/live_monitoring_config.yml
+
+Arguments:
+  --config       YAML configuration file
+  --data-dir     Override {ROOT_DATA_DIR}
+  --log-file     Log file to monitor
+  --output-file  Where to write alerts
+  --threshold    Override anomaly threshold
+  --verbose      Debug output
+  --daemonize    Run in background
+        </code></pre>
+
+        <h3>Python APIs</h3>
+
+        <h4>Configuration Loader</h4>
+
+        <pre><code>
+from src.config_loader import Config
+
+# Load from file
+config = Config.load_from_file(
+    "dockerconfig/train.yml",
+    root_data_dir="/path/to/data"
+)
+
+# Get values with defaults
+epochs = config.get("epochs", default=10)
+embedding_size = config.get("embedding_size", default=64)
+
+# Get file paths (resolves placeholders)
+output_dir = config.get_path("output_model_dir")
+
+# Get nested config
+training_config = config.get_section("training")
+        </code></pre>
+
+        <h4>Text Encoding</h4>
+
+        <pre><code>
+from src.tx.train import TextEncoderHandle
+from src.tx.encode import DatasetEncoder
+
+# Load trained text encoder
+encoder = TextEncoderHandle(model_path="/path/to/encoder.h5")
+
+# Encode a message
+vector = encoder.encode("BlockReport processing took 120ms")
+# vector is np.array of shape (128,)
+
+# Batch encoding
+messages = ["Message 1", "Message 2", ...]
+vectors = encoder.encode_batch(messages)
+# vectors is np.array of shape (len(messages), 128)
+
+# Dataset encoding
+dataset_encoder = DatasetEncoder(
+    encoder=encoder,
+    vocab_path="/path/to/vocab.pkl"
+)
+vectors_list = dataset_encoder.encode_file("/path/to/logs.txt")
+        </code></pre>
+
+        <h4>Anomaly Detection</h4>
+
+        <pre><code>
+from src.an.eval import BidirectionalLSTMAnomalyDetectorHandle
+
+# Load trained detector
+detector = BidirectionalLSTMAnomalyDetectorHandle(
+    model_path="/path/to/detector.h5"
+)
+
+# Score a sequence of vectors
+sequence = np.random.randn(10, 128)  # 10 vectors of 128 dims
+score = detector.get_anomaly_score(sequence)
+# score is a float (reconstruction error)
+
+# Batch scoring
+sequences = [seq1, seq2, ...]
+scores = detector.batch_score(sequences)
+        </code></pre>
+
+        <h4>Log Parsing</h4>
+
+        <pre><code>
+from src.raw_log_file_process import UtahLogDatasetParseTools
+
+# Parse HDFS logs in Utah format
+parser = UtahLogDatasetParseTools()
+
+# Extract messages from raw logs
+with open("HDFS_1.log") as f:
+    for timestamp, message in parser.parse_log_file(f):
+        print(f"{timestamp}: {message}")
+
+# Load labels if available
+labels = parser.load_labels("labels.txt")
+# labels is dict: {block_id: (0 or 1)}
+        </code></pre>
+
+        <h4>Live Anomaly Detection</h4>
+
+        <pre><code>
+from src.live.main import DataStream, AnomalyIdentifier
+
+# Create log stream
+stream = DataStream(
+    log_file="/var/log/app.log",
+    tail_mode=True,
+    batch_interval=1.0
+)
+
+# Create anomaly detector
+detector = AnomalyIdentifier(
+    text_encoder="/path/to/encoder.h5",
+    anomaly_model="/path/to/detector.h5",
+    sequence_length=10,
+    threshold_multiplier=2.5,
+    window_size=100
+)
+
+# Process logs
+for log_entry in stream:
+    is_anomaly, score = detector.check(log_entry)
+    if is_anomaly:
+        print(f"ANOMALY: {log_entry} (score: {score})")
+        </code></pre>
+
+        <h3>File Formats</h3>
+
+        <h4>Raw Log Format (Utah)</h4>
+
+        <pre><code>
+YYMMDD HHMMSS MESSAGE TEXT
+220115 14:23:45 Got block report from DataNode 192.168.1.100 with 50000 blocks
+220115 14:23:46 BlockReport processing took 120ms for 50000 blocks
+220115 14:23:47 Rescan of DataNode 192.168.1.100 finished
+        </code></pre>
+
+        <h4>Labels File Format</h4>
+
+        <pre><code>
+block_id: anomaly_label
+blk_123456789: 1   # Anomalous
+blk_987654321: 0   # Normal
+blk_111111111: 1   # Anomalous
+        </code></pre>
+
+        <h4>Pickled Data Format</h4>
+
+        <p>
+          Encoded vectors and cached data use Python pickle format:
+        </p>
+
+        <pre><code>
+import pickle
+import numpy as np
+
+# Load encoded vectors
+with open("encoded_dataset/train_encoded.pkl", "rb") as f:
+    vectors = pickle.load(f)
+    # vectors is numpy array of shape (num_samples, 128)
+
+# Load vocabulary
+with open("prepared_data/vocab.pkl", "rb") as f:
+    vocab = pickle.load(f)
+    # vocab is dict: {word: id}
+        </code></pre>
+
+        <h4>Model Format (HDF5)</h4>
+
+        <p>
+          Neural network models are saved in Keras HDF5 format:
+        </p>
+
+        <pre><code>
+import tensorflow as tf
+
+# Load text encoder
+encoder = tf.keras.models.load_model("text_autoencoder_model/encoder.h5")
+
+# Load anomaly detector
+detector = tf.keras.models.load_model("anomaly_trained_model/detector.h5")
+
+# Make predictions
+output = encoder.predict(input_data)
+        </code></pre>
+
+        <h3>Project Structure Reference</h3>
+
+        <pre><code>
+deepsentry/
+├── src/                    # Main source code
+│   ├── tx/                 # Text encoding pipeline
+│   │   ├── prepare.py      # Data preparation
+│   │   ├── train.py        # Train text autoencoder
+│   │   └── encode.py       # Encode full dataset
+│   ├── an/                 # Anomaly detection
+│   │   ├── train.py        # Train anomaly detector
+│   │   ├── eval.py         # Evaluate (unlabeled)
+│   │   └── analysis.py     # Evaluate (labeled)
+│   ├── live/               # Live monitoring
+│   │   └── main.py         # Real-time detection
+│   ├── config_loader.py    # Configuration management
+│   ├── raw_log_file_process.py  # Log parsing
+│   ├── time_tools.py       # Time normalization
+│   └── dataset_labels.py   # Label handling
+├── ta/                     # Text autoencoder package
+├── kad/                    # Keras anomaly detector package
+├── t/                      # Tests
+│   └── test_smoke.py
+├── dockerconfig/           # YAML configuration files
+├── dockerrun/              # Docker run scripts
+├── docs/                   # This documentation
+├── Dockerfile              # Docker image specification
+├── requirements.txt        # Python dependencies
+└── README.md              # Project overview
+        </code></pre>
+
+        <h3>Dependencies</h3>
+
+        <p>
+          See <code>requirements.txt</code>:
+        </p>
+
+        <pre><code>
+tensorflow==2.4.1
+numpy==1.21.0
+scipy==1.7.0
+pyyaml==5.4.1
+scikit-learn==0.24.2
+matplotlib==3.4.2
+        </code></pre>
+
+        <h3>Environment Variables</h3>
+
+        <p>
+          Configuration via environment variables (overrides config files):
+        </p>
 
         <table>
-          <tr><th>File</th><th>Role</th></tr>
-          <tr><td><code>build.sh</code></td><td>Build the Docker image</td></tr>
-          <tr><td><code>dockerrun/run_text.sh</code></td><td>Train the text autoencoder</td></tr>
-          <tr><td><code>dockerrun/run_encode.sh</code></td><td>Encode the dataset</td></tr>
-          <tr><td><code>dockerrun/run_anomaly_train.sh</code></td><td>Train the anomaly detector</td></tr>
-          <tr><td><code>dockerrun/run_live.sh</code></td><td>Run live monitoring</td></tr>
+          <tr>
+            <th>Variable</th>
+            <th>Purpose</th>
+          </tr>
+          <tr>
+            <td>DEEPSENTRY_DATA_DIR</td>
+            <td>Root data directory (overrides {ROOT_DATA_DIR})</td>
+          </tr>
+          <tr>
+            <td>DEEPSENTRY_VERBOSE</td>
+            <td>Set to 1 for debug output</td>
+          </tr>
+          <tr>
+            <td>DEEPSENTRY_GPU</td>
+            <td>Set to 0 to force CPU (default: auto-detect)</td>
+          </tr>
+          <tr>
+            <td>DEEPSENTRY_BATCH_SIZE</td>
+            <td>Override batch size for all modules</td>
+          </tr>
         </table>
 
-        <div class="box">
-          <h3>External code</h3>
-          <p>The repository includes vendored third party packages under <code>kad</code> and <code>ta</code>, each carrying its own original licensing history.</p>
-        </div>
+        <h3>Exit Codes</h3>
+
+        <p>
+          Python modules return standard exit codes:
+        </p>
+
+        <table>
+          <tr>
+            <th>Code</th>
+            <th>Meaning</th>
+          </tr>
+          <tr>
+            <td>0</td>
+            <td>Success</td>
+          </tr>
+          <tr>
+            <td>1</td>
+            <td>General error (see logs)</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>Invalid arguments or config</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>Missing input file or data</td>
+          </tr>
+        </table>
 
         <div class="footer-nav">
-          <a href="07-live.html">Previous: Live monitoring</a>
+          <a href="07-live.html">Previous: Live Monitoring</a>
+          <a href="09-troubleshooting.html">Next: Troubleshooting</a>
           <a href="09-troubleshooting.html">Next: Troubleshooting</a>
         </div>
       </main>
